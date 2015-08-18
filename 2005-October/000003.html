@@ -1,0 +1,164 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r10 - in trunk/threec: . threec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r10%20-%20in%20trunk/threec%3A%20.%20threec&In-Reply-To=%3C200510280320.j9S3KZcN019647%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000002.html">
+   <LINK REL="Next"  HREF="000004.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r10 - in trunk/threec: . threec</H1>
+    <B>Daniel Gottlieb at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r10%20-%20in%20trunk/threec%3A%20.%20threec&In-Reply-To=%3C200510280320.j9S3KZcN019647%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r10 - in trunk/threec: . threec">dgott at berlios.de
+       </A><BR>
+    <I>Fri Oct 28 05:20:35 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000002.html">[Threec-svn] r9 - in trunk/threec: . threec threec/templates
+</A></li>
+        <LI>Next message: <A HREF="000004.html">[Threec-svn] r11 - trunk/threec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3">[ date ]</a>
+              <a href="thread.html#3">[ thread ]</a>
+              <a href="subject.html#3">[ subject ]</a>
+              <a href="author.html#3">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dgott
+Date: 2005-10-28 05:20:33 +0200 (Fri, 28 Oct 2005)
+New Revision: 10
+
+Modified:
+   trunk/threec/alldata.db
+   trunk/threec/dev.cfg
+   trunk/threec/threec/model.py
+Log:
+Updated database thinger
+
+Modified: trunk/threec/alldata.db
+===================================================================
+(Binary files differ)
+
+Modified: trunk/threec/dev.cfg
+===================================================================
+--- trunk/threec/dev.cfg	2005-10-26 03:19:58 UTC (rev 9)
++++ trunk/threec/dev.cfg	2005-10-28 03:20:33 UTC (rev 10)
+@@ -7,7 +7,7 @@
+ # pick the form for your database
+ # sqlobject.dburi=&quot;<A HREF="postgres://username@hostname/databasename">postgres://username@hostname/databasename</A>&quot;
+ # sqlobject.dburi=&quot;<A HREF="mysql://username:password@hostname:port/databasename">mysql://username:password@hostname:port/databasename</A>&quot;
+-sqlobject.dburi=&quot;<A HREF="sqlite:///Users/dgott/programming/python/threec/alldata.db">sqlite:///Users/dgott/programming/python/threec/alldata.db</A>&quot;
++sqlobject.dburi=&quot;<A HREF="sqlite:///Users/dgott/programming/python/threec/trunk/threec/alldata.db">sqlite:///Users/dgott/programming/python/threec/trunk/threec/alldata.db</A>&quot;
+ 
+ [session]
+ storeageType=&quot;ram&quot;
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-10-26 03:19:58 UTC (rev 9)
++++ trunk/threec/threec/model.py	2005-10-28 03:20:33 UTC (rev 10)
+@@ -11,6 +11,8 @@
+     user = StringCol(alternateID=True,length=15)
+     email = StringCol(length=40)
+     passwd = StringCol(length=40)
++    contests_hosting = MultipleJoin('Contest')
++    submissions = MultipleJoin('Submission')
+     
+ class Contest(SQLObject):
+     '''The basic data for each individual contest - Non-contest times are really a special case contest?'''
+@@ -18,27 +20,11 @@
+     start = DateTimeCol()
+     end = DateTimeCol()
+     name = StringCol(length=20)
+-    problemset = IntCol()
++    problemset = MultipleJoin('Problem')
++    submission = MultipleJoin('Submission')
+     creator = StringCol()
+ 
+-class ContestLog(SQLObject):
+-    '''A contest is a series of submissions - Non-contest submissions is really just a special case contest?'''
+-    _connection = hub
+-    contestName = StringCol()
+-    submission = IntCol()
+-
+-class ContestProblemMapping(SQLObject):
+-    '''Provides a mapping from contests to problems and vice versa.  Using the power of
+-    SQLObject that puts the objects in here for convenience'''
+-    contestName = StringCol(length=20)
+-    problemName = StringCol()
+-    def getContest(problem):
+-	pass
+-    
+-    def getProblems(contest):
+-	pass
+-
+-class Problems(SQLObject):
++class Problem(SQLObject):
+     '''Each problem gets an entry in here'''
+     _connection = hub
+     author = StringCol()
+@@ -49,18 +35,20 @@
+     correctness = IntCol()
+     altjudgerprogram = StringCol(default=None)
+ 
+-class Page(SQLObject):
+-    '''Intended to hold wiki data - No idea if we want/need this'''
+-    _connection = hub
+-    pagename = StringCol(alternateID=True,length=40)
+-    data = StringCol()
+-
+ class Submission(SQLObject):
+     '''I think it would be better to just log all submissions which contests can store the ID to'''
+-    user = StringCol(length=15)
+-    problem = IntCol()
++    user = ForeignKey('User')
++    problem = ForeignKey('Problem')
+     code = StringCol()
+     response = StringCol(length=10)
+     speed = IntCol()
+     memory = IntCol()
+     time = DateTimeCol()
++    contest = ForeignKey('Contest')
++
++class Page(SQLObject):
++    '''Intended to hold wiki data - No idea if we want/need this'''
++    _connection = hub
++    pagename = StringCol(alternateID=True,length=40)
++    data = StringCol()
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000002.html">[Threec-svn] r9 - in trunk/threec: . threec threec/templates
+</A></li>
+	<LI>Next message: <A HREF="000004.html">[Threec-svn] r11 - trunk/threec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#3">[ date ]</a>
+              <a href="thread.html#3">[ thread ]</a>
+              <a href="subject.html#3">[ subject ]</a>
+              <a href="author.html#3">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

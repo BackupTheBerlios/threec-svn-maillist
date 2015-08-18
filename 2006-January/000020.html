@@ -1,0 +1,172 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r27 - trunk/judge
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2006-January/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r27%20-%20trunk/judge&In-Reply-To=%3C200601010600.k0160gk5003404%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="000021.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r27 - trunk/judge</H1>
+    <B>rrenaud at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r27%20-%20trunk/judge&In-Reply-To=%3C200601010600.k0160gk5003404%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r27 - trunk/judge">rrenaud at berlios.de
+       </A><BR>
+    <I>Sun Jan  1 07:00:42 CET 2006</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="000021.html">[Threec-svn] r28 - trunk/judge
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#20">[ date ]</a>
+              <a href="thread.html#20">[ thread ]</a>
+              <a href="subject.html#20">[ subject ]</a>
+              <a href="author.html#20">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: rrenaud
+Date: 2006-01-01 07:00:35 +0100 (Sun, 01 Jan 2006)
+New Revision: 27
+
+Added:
+   trunk/judge/xmlrpc_interface.py
+   trunk/judge/xmlrpc_interface_unittest.py
+Log:
+added not so functional xml interface
+
+Added: trunk/judge/xmlrpc_interface.py
+===================================================================
+--- trunk/judge/xmlrpc_interface.py	2005-12-31 05:07:04 UTC (rev 26)
++++ trunk/judge/xmlrpc_interface.py	2006-01-01 06:00:35 UTC (rev 27)
+@@ -0,0 +1,29 @@
++#!/usr/bin/python
++
++import pprint
++from twisted.web import xmlrpc, server
++
++class XMLRPCJudgeInterface(xmlrpc.XMLRPC):
++    &quot;&quot;&quot;The XML Interface to the judger&quot;&quot;&quot;
++
++    def xmlrpc_judge(self, submission):
++        &quot;&quot;&quot;Judge submission&quot;&quot;&quot;
++        pprint.pprint(submission)
++        problem_number = submission['problem_number']
++        return True
++    
++    def xmlrpc_add_problem(self, problem_args):
++        pprint.pprint(problem_args)
++        if problem_args['type'] != 'exact':
++            # Only exact judgers are supported at the moment.
++            return False
++
++        problem_number = problem_args[&quot;problem_number&quot;]
++        input, output = problem_args[&quot;input&quot;], problem_args[&quot;output&quot;]
++        return True
++
++if __name__ == '__main__':
++    from twisted.internet import reactor
++    r = XMLRPCJudgeInterface()
++    reactor.listenTCP(7080, server.Site(r))
++    reactor.run()
+
+
+Property changes on: trunk/judge/xmlrpc_interface.py
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+Added: trunk/judge/xmlrpc_interface_unittest.py
+===================================================================
+--- trunk/judge/xmlrpc_interface_unittest.py	2005-12-31 05:07:04 UTC (rev 26)
++++ trunk/judge/xmlrpc_interface_unittest.py	2006-01-01 06:00:35 UTC (rev 27)
+@@ -0,0 +1,50 @@
++#!/usr/bin/python
++
++import xmlrpc_interface
++
++import twisted.trial.unittest
++import twisted.internet.reactor
++import twisted.web.server
++import twisted.web.xmlrpc
++
++class XMLRPCInterfaceTestCase(twisted.trial.unittest.TestCase):
++    
++    def setUp(self):
++        # This setUp twisted stuff is just to start the server, ordinarily
++        # the server would be already running, so you don't have to do this.
++        xml_judger = xmlrpc_interface.XMLRPCJudgeInterface()
++        xml_judger_site = twisted.web.server.Site(xml_judger)
++        self.server = twisted.internet.reactor.listenTCP(
++            0, xml_judger_site, interface = '127.0.0.1')
++            
++        self.port = self.server.getHost().port
++                                           
++    def tearDown(self):
++        self.server.stopListening()
++        # I just copied this from twisted/web/test/test_xmlrpc.py...
++        # I don't know why the server iterates...
++        twisted.internet.reactor.iterate()
++        twisted.internet.reactor.iterate()
++
++    def testAddProblems(self):
++        print 'Connecting to server...',
++        server_uri = &quot;<A HREF="http://localhost:%d">http://localhost:%d</A>&quot; % self.port
++        judge_connection = twisted.web.xmlrpc.Proxy(server_uri)
++        print 'Connected'
++        sample_problem_1 = {'problem_number': 1, 'input': '1 2\n3 4\n5 6\n',
++                            'output': '3\n7\n11', 'type': 'exact'}
++        print 'Adding sample problem 1'
++        # This proxy callRemote/deferred stuff is a bit weird.
++        x = judge_connection.callRemote('add_problem', sample_problem_1)
++        self.assertTrue(unittest.deferredResult(x))
++
++        correct_submission = {'code': &quot;&quot;&quot;import sys
++        for line in sys.stdin:
++           x, y = int(line.split()[0]), int(line.split()[1])
++           print x + y&quot;&quot;&quot;}
++        x = judge_connection.callRemote(correct_submission)
++        self.assertTrue(unittest.deferredResult(x))
++
++if __name__ == '__main__':
++    #assert False, &quot;the unittest doesn't actually run&quot;
++    twisted.trial.unittest.main()
+
+
+Property changes on: trunk/judge/xmlrpc_interface_unittest.py
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="000021.html">[Threec-svn] r28 - trunk/judge
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#20">[ date ]</a>
+              <a href="thread.html#20">[ thread ]</a>
+              <a href="subject.html#20">[ subject ]</a>
+              <a href="author.html#20">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

@@ -1,0 +1,298 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r25 - trunk/judge
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-November/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r25%20-%20trunk/judge&In-Reply-To=%3C200511280250.jAS2o3Qf013779%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000017.html">
+   
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r25 - trunk/judge</H1>
+    <B>rrenaud at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r25%20-%20trunk/judge&In-Reply-To=%3C200511280250.jAS2o3Qf013779%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r25 - trunk/judge">rrenaud at berlios.de
+       </A><BR>
+    <I>Mon Nov 28 03:50:03 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000017.html">[Threec-svn] r24 - trunk/judge
+</A></li>
+        
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#18">[ date ]</a>
+              <a href="thread.html#18">[ thread ]</a>
+              <a href="subject.html#18">[ subject ]</a>
+              <a href="author.html#18">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: rrenaud
+Date: 2005-11-28 03:49:35 +0100 (Mon, 28 Nov 2005)
+New Revision: 25
+
+Added:
+   trunk/judge/resource_limit.py
+Modified:
+   trunk/judge/judge_logger.py
+   trunk/judge/naked_judge.py
+   trunk/judge/naked_judge_unittest.py
+Log:
+Now cpu limit test passes
+
+Modified: trunk/judge/judge_logger.py
+===================================================================
+--- trunk/judge/judge_logger.py	2005-11-20 00:24:52 UTC (rev 24)
++++ trunk/judge/judge_logger.py	2005-11-28 02:49:35 UTC (rev 25)
+@@ -8,5 +8,6 @@
+ _judge_logger = logging.getLogger('judge')
+ console = logging.StreamHandler()
+ console.setLevel(logging.ERROR)
++# console.setLevel(logging.DEBUG) # uncomment for more verbose output
+ _judge_logger.addHandler(console)
+ 
+
+Modified: trunk/judge/naked_judge.py
+===================================================================
+--- trunk/judge/naked_judge.py	2005-11-20 00:24:52 UTC (rev 24)
++++ trunk/judge/naked_judge.py	2005-11-28 02:49:35 UTC (rev 25)
+@@ -9,6 +9,7 @@
+ over the internet.&quot;&quot;&quot;
+ 
+ import judge_logger
++import resource_limit
+ import logging
+ import os
+ import random
+@@ -27,6 +28,29 @@
+     def __init__(self, allow_insecurity = False):
+         &quot;&quot;&quot;@param allow_insecurity Should gaping vulnerabilities be allowed?&quot;&quot;&quot;
+         self._allow_insecurity = allow_insecurity
++
++    def judge_exact(self, cmd, expected):
++        &quot;&quot;&quot; @return JudgeResult containing the result of running cmd against
++        expected output.  Run is successful only if the actual output is
++        an exact match.&quot;&quot;&quot;
++        run_dir = self.get_run_dir()
++        os.mkdir(run_dir)
++        output_file_name = self.get_output_filename()
++        resource_lim = resource_limit.ResourceLimit(cpu_lim = 1,
++                                                    mem_lim = 32 &lt;&lt; 20)
++        forked_pid = os.fork()
++        logger.debug(&quot;got pid %d&quot; % forked_pid)
++
++        if forked_pid:  # parent
++            full_output_path = run_dir + '/' + output_file_name
++            return self._wait_for_child_and_judge(forked_pid,
++                                                  expected, full_output_path)
++
++        else:  # child
++            logger.debug('in child')
++            resource_lim.enforce_limits()
++            self._run_jailed_child_and_exit(cmd, run_dir, output_file_name)
++            assert False, &quot;jailed child should have exited&quot;
+     
+     def get_run_dir(self):
+         &quot;&quot;&quot; @return The directory that this judger should use for its
+@@ -66,15 +90,56 @@
+             else:
+                 logger.debug(&quot;No match actual [[ %s]] and expected [[ %s ]]&quot;
+                               % (file_contents, expected))
+-
+                 return False
+ 
+         except IOError, e:
+             logger.debug('in parent of judge_exact' + str(e))
+             return False  # Couldn't read file?
+ 
++    def _split_arglist(self, arglist):
++        &quot;&quot;&quot;Split arglist into a list of whitespace delimited strings, except
++        that double quoted substrings are placed in a single element in the
++        returned list, with the quotes removed.
++
++        GOTCHAS: This doesn't group quoted strings which are not
++        'well-delimited'.  By well-delimited, we mean a quoted string whose
++        opening quote is bordered to the left by whitespace, and whose closing
++        quote is bordered to the right by whitespace.
++        f&quot;o&quot; and &quot;fo&quot;o are both not well-delimited.
++
++        Here are a few correct usage input/output to the function.
++        
++        'hi' -&gt; ['hi']
++        'echo 1' -&gt; ['echo', '1']
++        'echo &quot;quoted string&quot; more'  -&gt; ['echo', 'quoted string', 'more']
++        &quot;&quot;&quot;
++        split_at_space = [x for x in arglist.split(' ') if len(x) &gt; 0]
++        ret = []
++        have_unclosed_quote = False
++        for item in split_at_space:
++            # Special case a quoted string containing no delimiters.
++            if len(item) == 1 and item[0] == '&quot;' and item[-1] == '&quot;':
++                ret.append(item[1:-1])
++                continue
++                
++            if not have_unclosed_quote and item[0] == '&quot;':
++                item = item[1:]
++                # Make an new entry in the list to collect quoted string.
++                ret.append('')  
++                have_unclosed_quote = True
++                
++            if have_unclosed_quote:
++                if len(item) &gt; 0 and item[-1] == '&quot;':
++                    item = item[:-1]
++                    have_unclosed_quote = False
++                if len(ret[-1]) &gt; 0: ret[-1] += ' '
++                ret[-1] += item
++            else:
++                ret.append(item)
++                
++        return ret
++
+     def _run_jailed_child_and_exit(self, cmd, run_dir, output_file_name):
+-        # set resource limits with resource module
+         try:
+             self.chroot_or_chdir(run_dir)
+             # change to &quot;judged&quot; user
+@@ -84,7 +149,7 @@
+             # test to fail.
+             # Maybe we should use subprocess rather than system, so
+             # no shell calls are performed.
+-            args = cmd.split()
++            args = self._split_arglist(cmd)
+             logger.info(&quot;running cmd &quot; +  cmd)
+             judged_proc = subprocess.Popen(args, stdout = subprocess.PIPE,
+                                            close_fds = True)
+@@ -109,26 +174,7 @@
+         except SecurityException:
+             os._exit(1)
+ 
+-    def judge_exact(self, cmd, expected):
+-        &quot;&quot;&quot; @return JudgeResult containing the result of running cmd against
+-        expected output.  Run is successful only if the actual output is
+-        an exact match.&quot;&quot;&quot;
+-        run_dir = self.get_run_dir()
+-        os.mkdir(run_dir)
+-        output_file_name = self.get_output_filename()
+ 
+-        forked_pid = os.fork()
+-        logger.debug(&quot;got pid %d&quot; % forked_pid)
+-
+-        if forked_pid:  # parent
+-            full_output_path = run_dir + '/' + output_file_name
+-            return self._wait_for_child_and_judge(forked_pid,
+-                                                  expected, full_output_path)
+-
+-        else:  # child
+-            logger.debug('in child')
+-            self._run_jailed_child_and_exit(cmd, run_dir, output_file_name)
+-            assert False, &quot;jailed child should have exited&quot;
+             
+ class SecurityException(Exception):
+     &quot;&quot;&quot; A SecurityException is raised when the judge refuses to continue
+
+Modified: trunk/judge/naked_judge_unittest.py
+===================================================================
+--- trunk/judge/naked_judge_unittest.py	2005-11-20 00:24:52 UTC (rev 24)
++++ trunk/judge/naked_judge_unittest.py	2005-11-28 02:49:35 UTC (rev 25)
+@@ -18,7 +18,29 @@
+     def testAccepted(self):
+         self.assertTrue(self.judger.judge_exact('echo 1', '1\n'))
+         self.assertFalse(self.judger.judge_exact('echo 1', '\n'))
++        # Since the command passed to judge exact won't do any shell magic,
++        # we fudge a sleep x &amp;&amp; echo 10 by writing a short inline python
++        # program.
++        waiter_template_program = '&quot;import time\n' + \
++                                  'start = time.time()\n' + \
++                                  'while time.time() - start &lt; %d: pass\n' + \
++                                  'print 10\n&quot;'
+ 
++        prints_10_quickly = 'python -c ' + (waiter_template_program % 0)
++        prints_10_slowly = 'python -c ' + (waiter_template_program % 2)
++        self.assertTrue(self.judger.judge_exact(prints_10_quickly, '10\n'))
++        # The second call should timeout.
++        self.assertFalse(self.judger.judge_exact(prints_10_slowly, '10\n'))
+ 
++    def testSplitArglist(self):
++        input_output = [('echo', ['echo']),
++                        ('echo 1', ['echo', '1']),
++                        ('echo &quot;hi&quot;', ['echo', 'hi']),
++                        ('echo &quot;hello 1 2 3&quot;', ['echo', 'hello 1 2 3']),
++                        ('echo &quot;hello    1    2 3&quot;', ['echo', 'hello 1 2 3'])]
++        for in_val, out_val in input_output:
++            self.assertEquals(self.judger._split_arglist(in_val), out_val)
++
++
+ if __name__ == &quot;__main__&quot;:
+     unittest.main()
+
+Added: trunk/judge/resource_limit.py
+===================================================================
+--- trunk/judge/resource_limit.py	2005-11-20 00:24:52 UTC (rev 24)
++++ trunk/judge/resource_limit.py	2005-11-28 02:49:35 UTC (rev 25)
+@@ -0,0 +1,35 @@
++#!/usr/bin/python
++&quot;&quot;&quot;The ResourceLimit class represents the amount of resources that a process
++can use.  It contains methods for setting the resources used by the process,
++as well as checking which resource was exceeded.&quot;&quot;&quot;
++
++import resource
++
++class ResourceLimit:
++    &quot;&quot;&quot;The ResourceLimit class is lazy, setting limits has no effect on
++    the process until enforce_limits is called.&quot;&quot;&quot;
++
++    def __init__(self, mem_lim = 32 &lt;&lt; 20, num_proc = 10, cpu_lim = 10):
++        &quot;&quot;&quot;Create a Resourcelimit with the given constraints on memory,
++        number of processes, and CPU limit.  Note that this will NOT
++        set the limits, you must call enforce_limits() to actually set the
++        limit.&quot;&quot;&quot;
++        self._mem_lim = mem_lim
++        self._num_proc = num_proc
++        self._cpu_lim = cpu_lim
++
++    def enforce_limits(self):
++        &quot;&quot;&quot;Ensure that this process cannot exceed our current
++        ResourceLimit.&quot;&quot;&quot;
++        self._set_lim(resource.RLIMIT_CPU, self._cpu_lim)
++        self._set_lim(resource.RLIMIT_AS, self._mem_lim)
++        #self._set_lim(resource.RLIMIT_NPROC, self._num_proc)
++
++    def exceeds_limits(self, rusage):
++        &quot;&quot;&quot;Return true iff rusage which is of type resource.struct_rusage
++        exceeds the current memory limit&quot;&quot;&quot;
++        pass
++        
++    def _set_lim(self, lim_type, lim_val):
++        resource.setrlimit(lim_type, (lim_val, lim_val))
++
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000017.html">[Threec-svn] r24 - trunk/judge
+</A></li>
+	
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#18">[ date ]</a>
+              <a href="thread.html#18">[ thread ]</a>
+              <a href="subject.html#18">[ subject ]</a>
+              <a href="author.html#18">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

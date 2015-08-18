@@ -1,0 +1,300 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r9 - in trunk/threec: . threec threec/templates
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r9%20-%20in%20trunk/threec%3A%20.%20threec%20threec/templates&In-Reply-To=%3C200510260319.j9Q3Jx7u015447%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000001.html">
+   <LINK REL="Next"  HREF="000003.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r9 - in trunk/threec: . threec threec/templates</H1>
+    <B>Daniel Gottlieb at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r9%20-%20in%20trunk/threec%3A%20.%20threec%20threec/templates&In-Reply-To=%3C200510260319.j9Q3Jx7u015447%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r9 - in trunk/threec: . threec threec/templates">dgott at berlios.de
+       </A><BR>
+    <I>Wed Oct 26 05:19:59 CEST 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000001.html">[Threec-svn] r8 - in trunk/threec/threec: . templates
+</A></li>
+        <LI>Next message: <A HREF="000003.html">[Threec-svn] r10 - in trunk/threec: . threec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2">[ date ]</a>
+              <a href="thread.html#2">[ thread ]</a>
+              <a href="subject.html#2">[ subject ]</a>
+              <a href="author.html#2">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dgott
+Date: 2005-10-26 05:19:58 +0200 (Wed, 26 Oct 2005)
+New Revision: 9
+
+Modified:
+   trunk/threec/dev.cfg
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/model.py
+   trunk/threec/threec/templates/homepage.kid
+   trunk/threec/threec/templates/login.kid
+   trunk/threec/threec/templates/master.kid
+Log:
+I think things still work but i generalized messages to see if I could and changed/updated the database
+
+Modified: trunk/threec/dev.cfg
+===================================================================
+--- trunk/threec/dev.cfg	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/dev.cfg	2005-10-26 03:19:58 UTC (rev 9)
+@@ -2,9 +2,15 @@
+ 
+ [global]
+ server.environment=&quot;development&quot;
+-autoreload.package=&quot;ccubed&quot;
++autoreload.package=&quot;threec&quot;
+ 
+ # pick the form for your database
+ # sqlobject.dburi=&quot;<A HREF="postgres://username@hostname/databasename">postgres://username@hostname/databasename</A>&quot;
+ # sqlobject.dburi=&quot;<A HREF="mysql://username:password@hostname:port/databasename">mysql://username:password@hostname:port/databasename</A>&quot;
+ sqlobject.dburi=&quot;<A HREF="sqlite:///Users/dgott/programming/python/threec/alldata.db">sqlite:///Users/dgott/programming/python/threec/alldata.db</A>&quot;
++
++[session]
++storeageType=&quot;ram&quot;
++cookieName=&quot;C^3-Session-ID&quot;
++timeout=60
++cleanUpDelay=60
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/controllers.py	2005-10-26 03:19:58 UTC (rev 9)
+@@ -88,20 +88,26 @@
+     def confirm(self,passwdchk,email):
+ 	return dict()
+ 
+-    @turbogears.expose(html='threec.templates.login')
++    @turbogears.expose(html='threec.templates.homepage')
+     def login(self,user,passwd):
++	message = []
++	ret = {'message':message}
++
+ 	try:
+ 	    user = User.byUser(user)
+ 	except SQLObjectNotFound:
+-	    raise cherrypy.HTTPRedirect('/createuser?')
++	    message.append('That is an invalid Username/Password')
++	    return ret
+ 
+ 	if sha.sha(passwd).hexdigest() == user.passwd:
+ 	    #create a session
+ 	    pass
+ 	else:
+-	    raise cherrypy.HTTPRedirect('/index?unknown=true' % user)
++	    message.append('That is an invalid Username/Password')
++	    return ret
+ 
+-	return 'Logged in successfully'
++	message.append('You have successfully logged in')
++	return ret
+ 
+     #@turbogears.expose(html=&quot;threec.templates.homepage&quot;)
+     #def searchuser(self,username=&quot;Unknown&quot;):
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/model.py	2005-10-26 03:19:58 UTC (rev 9)
+@@ -2,31 +2,65 @@
+ from turbogears.database import AutoConnectHub
+ 
+ hub = AutoConnectHub()
++'''I don't think these all need to have _connection = hub, I dont think we will be using a lot of
++transactions'''
+ 
+ class User(SQLObject):
++    '''Self explanatory'''
+     _connection = hub
+     user = StringCol(alternateID=True,length=15)
+     email = StringCol(length=40)
+     passwd = StringCol(length=40)
+     
+ class Contest(SQLObject):
++    '''The basic data for each individual contest - Non-contest times are really a special case contest?'''
+     _connection = hub
+     start = DateTimeCol()
+     end = DateTimeCol()
+     name = StringCol(length=20)
+     problemset = IntCol()
++    creator = StringCol()
+ 
++class ContestLog(SQLObject):
++    '''A contest is a series of submissions - Non-contest submissions is really just a special case contest?'''
++    _connection = hub
++    contestName = StringCol()
++    submission = IntCol()
++
++class ContestProblemMapping(SQLObject):
++    '''Provides a mapping from contests to problems and vice versa.  Using the power of
++    SQLObject that puts the objects in here for convenience'''
++    contestName = StringCol(length=20)
++    problemName = StringCol()
++    def getContest(problem):
++	pass
++    
++    def getProblems(contest):
++	pass
++
+ class Problems(SQLObject):
++    '''Each problem gets an entry in here'''
+     _connection = hub
+-    problem = IntCol()
+-    problemset = IntCol()
+-    problemstmt = StringCol()
++    author = StringCol()
++    problemName = StringCol()
++    problemUrl = StringCol()
+     timelimit = IntCol()
+     memlimit = IntCol()
+     correctness = IntCol()
+     altjudgerprogram = StringCol(default=None)
+ 
+ class Page(SQLObject):
++    '''Intended to hold wiki data - No idea if we want/need this'''
+     _connection = hub
+     pagename = StringCol(alternateID=True,length=40)
+     data = StringCol()
++
++class Submission(SQLObject):
++    '''I think it would be better to just log all submissions which contests can store the ID to'''
++    user = StringCol(length=15)
++    problem = IntCol()
++    code = StringCol()
++    response = StringCol(length=10)
++    speed = IntCol()
++    memory = IntCol()
++    time = DateTimeCol()
+
+Modified: trunk/threec/threec/templates/homepage.kid
+===================================================================
+--- trunk/threec/threec/templates/homepage.kid	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/templates/homepage.kid	2005-10-26 03:19:58 UTC (rev 9)
+@@ -1,15 +1,7 @@
+ &lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;<A HREF="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd</A>&quot;&gt;
+-&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot;&gt;
++&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot;
++      py:extends=&quot;'master.kid'&quot;&gt;
+ 
+-&lt;?python
+-try:
+-   if message:
+-      pass
+-except NameError:
+-   message = []
+-print 'all ok'
+-?&gt;
+-
+   &lt;head&gt;
+     &lt;meta content=&quot;text/html; charset=UTF-8&quot; http-equiv=&quot;content-type&quot; /&gt;
+     &lt;title&gt;Welcome to the Collaborative Coding Contest Homepage&lt;/title&gt;
+@@ -22,14 +14,6 @@
+       &lt;input type=&quot;submit&quot; value=&quot;Create&quot; /&gt;&lt;br/&gt;
+     &lt;/form&gt;
+     
+-&lt;!--
+-    &lt;span py:replace=&quot;message&quot;&gt;Message&lt;/span&gt;
+-!--&gt;
+-
+-    &lt;span py:for=&quot;msg in message&quot;&gt;
+-      &lt;p py:content=&quot;msg&quot;&gt;Message to be displayed&lt;/p&gt;
+-    &lt;/span&gt;
+-
+     Login&lt;br/&gt;
+     &lt;form action=&quot;login&quot; method=&quot;post&quot;&gt;
+       Name:&lt;textarea name=&quot;user&quot; rows=&quot;1&quot; cols=&quot;15&quot;&gt;&lt;/textarea&gt;&lt;br/&gt;
+
+Modified: trunk/threec/threec/templates/login.kid
+===================================================================
+--- trunk/threec/threec/templates/login.kid	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/templates/login.kid	2005-10-26 03:19:58 UTC (rev 9)
+@@ -8,7 +8,6 @@
+   &lt;/head&gt;
+ 
+   &lt;body&gt;
+-
+     &lt;form action=&quot;createuser&quot; method=&quot;post&quot;&gt;
+       Username:&lt;textarea name=&quot;user&quot; rows=&quot;1&quot; cols=&quot;15&quot;&gt;&lt;/textarea&gt;&lt;br/&gt;
+       Password:&lt;input type=&quot;password&quot; name=&quot;passwd&quot; rows=&quot;1&quot; cols=&quot;15&quot;&gt;&lt;/textarea&gt;&lt;br/&gt;
+
+Modified: trunk/threec/threec/templates/master.kid
+===================================================================
+--- trunk/threec/threec/templates/master.kid	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/templates/master.kid	2005-10-26 03:19:58 UTC (rev 9)
+@@ -1,16 +1,28 @@
+ &lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;<A HREF="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd</A>&quot;&gt;
+ &lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot;&gt;
+ 
++
++
+ &lt;head&gt;
+-    &lt;meta content=&quot;text/html; charset=UTF-8&quot; http-equiv=&quot;content-type&quot; /&gt;
+-    &lt;title&gt;Your title goes here&lt;/title&gt;
++  &lt;title&gt;Testing&lt;/title&gt;
+ &lt;/head&gt;
+ 
+-&lt;body py:match=&quot;item.tag=='{<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>}body'&quot;&gt;
+-    &lt;h1&gt;TurboGears is Running&lt;/h1&gt;
+-    
+-    &lt;!-- &lt;div py:if=&quot;turbogearsflash&quot; class=&quot;flash&quot; py:content=&quot;turbogearsflash&quot;&gt;&lt;/div&gt; !--&gt;
+-    
+-    &lt;div py:replace=&quot;item[:]&quot;/&gt;
++&lt;body py:match=&quot;item.tag == '{<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>}body'&quot;&gt; 
++
++&lt;?python
++try:
++   if message:
++      pass
++except NameError:
++   message = []
++
++print 'this works'
++print message
++?&gt;
++
++  &lt;span py:for=&quot;msg in message&quot;&gt;
++    &lt;p py:content=&quot;msg&quot;&gt;Message to be displayed&lt;/p&gt;
++  &lt;/span&gt;
++  &lt;div py:replace=&quot;item[:]&quot;&gt; &lt;/div&gt;
+ &lt;/body&gt;
+ &lt;/html&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000001.html">[Threec-svn] r8 - in trunk/threec/threec: . templates
+</A></li>
+	<LI>Next message: <A HREF="000003.html">[Threec-svn] r10 - in trunk/threec: . threec
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#2">[ date ]</a>
+              <a href="thread.html#2">[ thread ]</a>
+              <a href="subject.html#2">[ subject ]</a>
+              <a href="author.html#2">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

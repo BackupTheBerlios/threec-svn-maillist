@@ -1,0 +1,139 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r13 - trunk/judge
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-November/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r13%20-%20trunk/judge&In-Reply-To=%3C200511060248.jA62mndL025837%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000005.html">
+   <LINK REL="Next"  HREF="000007.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r13 - trunk/judge</H1>
+    <B>Robert Renaud at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r13%20-%20trunk/judge&In-Reply-To=%3C200511060248.jA62mndL025837%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r13 - trunk/judge">rrenaud at berlios.de
+       </A><BR>
+    <I>Sun Nov  6 03:48:49 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000005.html">[Threec-svn] r12 - in trunk: . judge threec
+</A></li>
+        <LI>Next message: <A HREF="000007.html">[Threec-svn] r14 - in trunk/threec: . threec threec/templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#6">[ date ]</a>
+              <a href="thread.html#6">[ thread ]</a>
+              <a href="subject.html#6">[ subject ]</a>
+              <a href="author.html#6">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: rrenaud
+Date: 2005-11-06 03:48:48 +0100 (Sun, 06 Nov 2005)
+New Revision: 13
+
+Added:
+   trunk/judge/naked_judge.py
+Log:
+comitting while i still can.. the code really doesn't work though
+
+Added: trunk/judge/naked_judge.py
+===================================================================
+--- trunk/judge/naked_judge.py	2005-11-06 02:48:04 UTC (rev 12)
++++ trunk/judge/naked_judge.py	2005-11-06 02:48:48 UTC (rev 13)
+@@ -0,0 +1,63 @@
++#!/usr/bin/python
++
++import os
++import random
++import resource
++import sys
++
++class NakedJudge:
++    &quot;&quot;&quot; The NakedJudge runs code using standard unix jailing techiques.
++    It should be sufficient for a local contest where the contestants are
++    trusted, but it probably isn't sufficient for running a public contest
++    over the internet. &quot;&quot;&quot;
++
++    def __init__(self, allow_insecurity = False):
++        self._allow_insecurity = allow_insecurity
++
++    
++    def get_run_dir(self):
++        &quot;&quot;&quot; @return the directory that this judeger should use for its
++        chroot&quot;&quot;&quot;
++        # This should be a function of judge id, just use a random name for now
++        return os.tmpnam()
++
++    def get_output_filename(self):
++        return 'actual_out'
++
++    def chroot_or_chdir(self, dir):
++        &quot;&quot;&quot; Change root or change directory to dir.  Chroot is attempted
++        first, since it is much more secure, but chroot requires
++        privileges that usually only root has. &quot;&quot;&quot;
++        try:
++            os.chroot(dir)
++        except OSError, noperms:
++            if self._allow_insecurity:
++                os.chdir(dir)
++        raise SecurityError
++
++    def judge_exact(self, cmd, expected):
++        &quot;&quot;&quot; @return JudgeResult containing the result of running cmd against
++        expected output.  Run is successful only if there actual output is
++        an exact match.&quot;&quot;&quot;
++        run_dir = self.get_run_dir()
++        os.mkdir(run_dir)
++        output_file_name = self.get_output_filename()
++
++        self.child_pid = os.fork()
++
++        if self.child_pid:  # parent
++            ret = os.waitpid(self.child_pid, 1)
++            print ret
++            
++        else:  # child
++            # set resource limits with resource
++            self.chroot_or_chdir(run_dir)
++
++            os.system(cmd + '&gt;' + output_file_name)
++            sys.exit(0)
++            
++            
++
++
++    
++    
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000005.html">[Threec-svn] r12 - in trunk: . judge threec
+</A></li>
+	<LI>Next message: <A HREF="000007.html">[Threec-svn] r14 - in trunk/threec: . threec threec/templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#6">[ date ]</a>
+              <a href="thread.html#6">[ thread ]</a>
+              <a href="subject.html#6">[ subject ]</a>
+              <a href="author.html#6">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

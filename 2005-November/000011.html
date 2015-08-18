@@ -1,0 +1,344 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r17 - in trunk/threec/threec: . templates
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-November/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r17%20-%20in%20trunk/threec/threec%3A%20.%20templates&In-Reply-To=%3C200511100531.jAA5Vflp004175%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000009.html">
+   <LINK REL="Next"  HREF="000010.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r17 - in trunk/threec/threec: . templates</H1>
+    <B>Daniel Gottlieb at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r17%20-%20in%20trunk/threec/threec%3A%20.%20templates&In-Reply-To=%3C200511100531.jAA5Vflp004175%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r17 - in trunk/threec/threec: . templates">dgott at berlios.de
+       </A><BR>
+    <I>Thu Nov 10 06:31:41 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000009.html">[Threec-svn] r16 - in trunk/threec/threec: . templates
+</A></li>
+        <LI>Next message: <A HREF="000010.html">[Threec-svn] r18 - trunk/threec/threec/templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#11">[ date ]</a>
+              <a href="thread.html#11">[ thread ]</a>
+              <a href="subject.html#11">[ subject ]</a>
+              <a href="author.html#11">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dgott
+Date: 2005-11-10 06:31:36 +0100 (Thu, 10 Nov 2005)
+New Revision: 17
+
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/model.py
+   trunk/threec/threec/templates/contests.kid
+   trunk/threec/threec/templates/homepage.kid
+   trunk/threec/threec/templates/userList.kid
+Log:
+things dont work but i feel like committing cause some things do work...but the database changed so dont expect anything you had to work from before until i repopulate which is what this submission will help do
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/controllers.py	2005-11-10 05:31:36 UTC (rev 17)
+@@ -2,8 +2,17 @@
+ from model import Page,hub,User,Contest,Submission,Problem
+ from sqlobject import SQLObjectNotFound
+ import cherrypy
+-import sha
++import sha,datetime
+ 
++def separateContests(contest):
++    return [contest.name,contest.start,contest.end,contest.user.user,'/problems?contestId=%d'%contest.id]
++
++def separateSubmission(subm):
++    return [subm.problem.problemName,subm.problem.problemUrl,'/viewcode?submissionId=%d'%subm.id]
++
++def separateProblems(prob):
++    return [prob.problemName,prob.problemUrl,prob.author,prob.contest.name,'/problems?contestId=%d'%prob.contest.id,'/submissions?problemId=%d'%prob.id]
++
+ class Root:
+ 
+     @turbogears.expose(html=&quot;threec.templates.homepage&quot;)
+@@ -16,16 +25,77 @@
+ 	    
+ 	return ret
+ 
+-    @turbogears.expose(html='threec.templates.homepage')
+-    def searchUsers(self,user):
++    @turbogears.expose(html='threec.templates.editcontest')
++    def editcontest(self,contestId,user):
++	name = ''
++	start = ''
++	end = ''
++	problems = []
++	ret = {'name':name,'start':start,'end':end,'problemset':problems,'user':user}
++
++	if contestId:
++	    contest = Contest.get(contestId)
++	    name = contest.name
++	    start = contest.start
++	    end = contest.end
++	    problems = contest.problemset
++
++	return ret
++
++    @turbogears.expose(html='threec.templates.hosting')
++    def hostcontest(self,user=None,passwd=None):
++	if not user:
++	    return {'message':['Must enter a valid username and password to manage contests'],'tg_template':'threec.templates.homepage'}
++
++	loginSuccessful = login(self,user,passwd)
++	if loginSuccessful['message'][0].count('invalid'):
++	    return {'message':['Must enter a valid username and password to manage contests'],'tg_template':'threec.templates.homepage'}
++
++	user = User.byUser(user)
++	priorContests = []
++	upcomingContests = []
++	now = datetime.datetime.now()
++	for contest in user.contests_hosting:
++	    if contest.start &gt; now:
++		upcomingContests.append(contest)
++	    else:
++		priorContests.append(contest)
++
++	ret = {'prior':priorContests,'upcoming':upcomingContests,'tg_template':'threec.templates.managecontests','user':user}
++	return ret
++
++    @turbogears.expose(html='threec.templates.userlist')
++    def searchusers(self,userName):
+ 	message = []
++	ret = {'message':message}
+ 	try:
+-	    message.append(User.byUser(user))
++	    user = User.byUser(userName)
+ 	except SQLObjectNotFound:
+-	    message.append('%s not found'%user)
+-	ret = {'message':message}
++	    message.append('%s is an unknown username'%userName)
++	    ret['tg_template'] = 'threec.templates.homepage'
++	    return ret
++
++	ret['user'] = userName
++	submissions = [separateSubmission(q) for q in user.submissions]
++	ret['submissions']=submissions
+ 	return ret
+ 
++    @turbogears.expose(html='threec.templates.viewcode')
++    def viewcode(self,submissionId):
++	message = []
++	ret = {'message':message}
++
++	try:
++	    subm = Submission.get(submissionId)
++	except SQLObjectNotFound:
++	    message.append('%d is an unknown submission ID'%submissionId)
++	    ret['tg_template']='threec.templates.homepage'
++	    return ret
++	
++	#ret['code'] = subm.code
++	#return ret
++	return subm.code #kills &lt; &gt; thinking they are tags
++
+     @turbogears.expose(html='threec.templates.homepage')
+     def default(self,*args,**kw):
+ 	#message = [str(kw)]
+@@ -56,27 +126,58 @@
+ 	probs = Problem.select('author=&quot;%s&quot;'%s)
+ 	problems = []
+ 	ret = {'problems':problems}
++	now = datetime.datetime.now()
+ 	for item in probs:
+-	    problems.append([item.problemName,item.problemUrl])
++	    if item.contest.start &lt; now:
++		problems.append([item.problemName,item.problemUrl])
+ 	    
+ 	ret['author']=s
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.contests')
++    def upcomingcontests(self,**kw):
++	contests = Contest.select()
++	_contests = []
++	now = datetime.datetime.now()
++	for contest in contests:
++	    if contest.start &gt; now:
++		_contests.append(separateContests(contest))
++
++	if not len(_contests):
++	    ret = {'message':['No contests are scheduled']};
++	else:
++	    ret = {}
++
++	ret['contests']=_contests
++	ret['showProblemSetLink']=False
++	return ret
++
++    @turbogears.expose(html='threec.templates.contests')
+     def contests(self,**kw):
+ 	contests = Contest.select()
+ 	_contests = []
++	now = datetime.datetime.now()
+ 	for contest in contests:
+-	    _contests.append([contest.name,contest.start,contest.end,contest.user.user,'/problems?contest=%d'%contest.id])
++	    if contest.start &lt; now:
++		_contests.append(separateContests(contest))
+ 	    
+-	ret = {'contests':_contests}
++	ret = {'contests':_contests,'showProblemSetLink':True}
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.problems')
+-    def problems(self,contest):
++    def problems(self,contestId):
+ 	problems = []
+ 	ret = {'problems':problems}
+-	contest = Contest.get(int(contest))
++	try:
++	    contest = Contest.get(int(contestId))
++	except SQLObjectNotFound:
++	    ret['message'] = ['%d is not a valid contest id'%contestId]
++	    return ret
++
++	if contest.start &gt; datetime.datetime.now():
++	    ret['message'] = ['The contest has not started yet']
++	    return ret
++
+ 	set = contest.problemset
+ 	for item in set:
+ 	    problems.append([item.problemName,item.problemUrl,item.author])
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/model.py	2005-11-10 05:31:36 UTC (rev 17)
+@@ -33,6 +33,7 @@
+     correctness = IntCol(default=100)
+     contest = ForeignKey('Contest')
+     altjudgerprogram = StringCol(default=None)
++    submissions = MultipleJoin('Submission')
+ 
+ class Submission(SQLObject):
+     '''I think it would be better to just log all submissions which contests can store the ID to'''
+@@ -45,6 +46,7 @@
+     memory = IntCol(notNone=True)
+     time = DateTimeCol(default=DateTimeCol.now())
+     contest = ForeignKey('Contest')
++    language = StringCol(length=6)
+ 
+ class Page(SQLObject):
+     '''Intended to hold wiki data - No idea if we want/need this'''
+
+Modified: trunk/threec/threec/templates/contests.kid
+===================================================================
+--- trunk/threec/threec/templates/contests.kid	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/templates/contests.kid	2005-11-10 05:31:36 UTC (rev 17)
+@@ -9,15 +9,15 @@
+   
+   &lt;body&gt;
+     &lt;table&gt;
+-      &lt;tr&gt;
+-	&lt;td&gt;Name&lt;/td&gt;&lt;td&gt;Start&lt;/td&gt;&lt;td&gt;End&lt;/td&gt;&lt;td&gt;Created By&lt;/td&gt;&lt;td&gt;Problem Set&lt;/td&gt;
++      &lt;tr align=&quot;center&quot;&gt;
++	&lt;td&gt;Name&lt;/td&gt;&lt;td&gt;Start&lt;/td&gt;&lt;td&gt;End&lt;/td&gt;&lt;td&gt;Created By&lt;/td&gt;&lt;td py:if=&quot;showProblemSetLink&quot;&gt;Problem Set&lt;/td&gt;
+       &lt;/tr&gt;
+-      &lt;tr py:for=&quot;contest in contests&quot;&gt;
++      &lt;tr py:for=&quot;contest in contests&quot; align=&quot;center&quot;&gt;
+ 	&lt;td py:content=&quot;contest[0]&quot;&gt;Name&lt;/td&gt;
+ 	&lt;td py:content=&quot;contest[1]&quot;&gt;Start&lt;/td&gt;
+ 	&lt;td py:content=&quot;contest[2]&quot;&gt;End&lt;/td&gt;
+-	&lt;td py:content=&quot;contest[3]&quot;&gt;Created By&lt;/td&gt;
+-	&lt;td&gt;&lt;a href=&quot;${contest[4]}&quot;&gt;View Problems&lt;/a&gt;&lt;/td&gt;
++	&lt;td py:content=&quot;contest[3]&quot;&gt;&lt;a href=&quot;/searchUsers?userName=${contest[3]}&quot;&gt;Created By&lt;/a&gt;&lt;/td&gt;
++	&lt;td py:if=&quot;showProblemSetLink&quot;&gt;&lt;a href=&quot;${contest[4]}&quot;&gt;View Problems&lt;/a&gt;&lt;/td&gt;
+       &lt;/tr&gt;
+     &lt;/table&gt;
+   &lt;/body&gt;
+
+Modified: trunk/threec/threec/templates/homepage.kid
+===================================================================
+--- trunk/threec/threec/templates/homepage.kid	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/templates/homepage.kid	2005-11-10 05:31:36 UTC (rev 17)
+@@ -22,13 +22,13 @@
+     
+     &lt;br/&gt;
+     &lt;a href=&quot;/contests&quot;&gt;All Competitions&lt;/a&gt;&lt;br/&gt;
+-    &lt;a href=&quot;/calender&quot;&gt;Upcoming Competitions&lt;/a&gt;&lt;br/&gt;
+-    &lt;a href=&quot;/host&quot;&gt;Manage your Competitions&lt;/a&gt;&lt;br/&gt;
++    &lt;a href=&quot;/upcomingcontests&quot;&gt;Upcoming Competitions&lt;/a&gt;&lt;br/&gt;
++    &lt;a href=&quot;/hostcontests&quot;&gt;Manage your Competitions&lt;/a&gt;&lt;br/&gt;
+ 
+     &lt;br /&gt;
+     Search for a User:&lt;br/&gt;
+-    &lt;form action=&quot;searchUsers&quot; method=&quot;post&quot;&gt;
+-      &lt;textarea name=&quot;user&quot; rows=&quot;1&quot; cols=&quot;15&quot;&gt;&lt;/textarea&gt;&lt;br/&gt;      
++    &lt;form action=&quot;searchusers&quot; method=&quot;post&quot;&gt;
++      &lt;textarea name=&quot;userName&quot; rows=&quot;1&quot; cols=&quot;15&quot;&gt;&lt;/textarea&gt;&lt;br/&gt;      
+       &lt;input type=&quot;submit&quot; value=&quot;Search&quot; /&gt;&lt;br/&gt;
+     &lt;/form&gt;&lt;br/&gt;
+     
+
+Modified: trunk/threec/threec/templates/userList.kid
+===================================================================
+--- trunk/threec/threec/templates/userList.kid	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/templates/userList.kid	2005-11-10 05:31:36 UTC (rev 17)
+@@ -8,12 +8,16 @@
+   &lt;/head&gt;
+ 
+   &lt;body&gt;
+-    &lt;p&gt;You searched for &lt;span py:replace=&quot;user&quot;&gt; username &lt;/span&gt;&lt;/p&gt;
+-    &lt;p&gt; 
+-      Here are &lt;span py:replace=&quot;user&quot;&gt;username&lt;/span&gt;'s stats as a &lt;span py:replace=&quot;type&quot;&gt; coder/problemsetter &lt;/span&gt;
+-    &lt;/p&gt;
+-    &lt;div&gt;
+-      &lt;font size=&quot;2&quot;&gt;Powered by &lt;a href=&quot;<A HREF="http://www.turbogears.org.nyud.net:8090/">http://www.turbogears.org.nyud.net:8090/</A>&quot;&gt;Turbogears&lt;/a&gt; and SQLite&lt;/font&gt;
+-    &lt;/div&gt;
++    &lt;p&gt;User information for &lt;span py:replace=&quot;user&quot;&gt; username &lt;/span&gt;&lt;/p&gt;
++
++    &lt;table&gt;
++      &lt;tr align=&quot;center&quot;&gt;
++	&lt;td&gt;Problem&lt;/td&gt;&lt;td&gt;Code&lt;/td&gt;
++      &lt;/tr&gt;
++      &lt;tr py:for=&quot;subm in submissions&quot; align=&quot;center&quot;&gt;
++	&lt;td&gt;&lt;a href=&quot;${subm[1]}&quot;&gt;${subm[0]}&lt;/a&gt;&lt;/td&gt;
++	&lt;td&gt;&lt;a href=&quot;${subm[2]}&quot;&gt;View Code&lt;/a&gt;&lt;/td&gt;
++      &lt;/tr&gt;
++    &lt;/table&gt;
+   &lt;/body&gt;
+ &lt;/html&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000009.html">[Threec-svn] r16 - in trunk/threec/threec: . templates
+</A></li>
+	<LI>Next message: <A HREF="000010.html">[Threec-svn] r18 - trunk/threec/threec/templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#11">[ date ]</a>
+              <a href="thread.html#11">[ thread ]</a>
+              <a href="subject.html#11">[ subject ]</a>
+              <a href="author.html#11">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

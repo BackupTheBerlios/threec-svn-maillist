@@ -1,0 +1,746 @@
+From rrenaud at berlios.de  Sun Jan  1 07:00:42 2006
+From: rrenaud at berlios.de (rrenaud at BerliOS)
+Date: Sun, 1 Jan 2006 07:00:42 +0100
+Subject: [Threec-svn] r27 - trunk/judge
+Message-ID: <200601010600.k0160gk5003404@sheep.berlios.de>
+
+Author: rrenaud
+Date: 2006-01-01 07:00:35 +0100 (Sun, 01 Jan 2006)
+New Revision: 27
+
+Added:
+   trunk/judge/xmlrpc_interface.py
+   trunk/judge/xmlrpc_interface_unittest.py
+Log:
+added not so functional xml interface
+
+Added: trunk/judge/xmlrpc_interface.py
+===================================================================
+--- trunk/judge/xmlrpc_interface.py	2005-12-31 05:07:04 UTC (rev 26)
++++ trunk/judge/xmlrpc_interface.py	2006-01-01 06:00:35 UTC (rev 27)
+@@ -0,0 +1,29 @@
++#!/usr/bin/python
++
++import pprint
++from twisted.web import xmlrpc, server
++
++class XMLRPCJudgeInterface(xmlrpc.XMLRPC):
++    """The XML Interface to the judger"""
++
++    def xmlrpc_judge(self, submission):
++        """Judge submission"""
++        pprint.pprint(submission)
++        problem_number = submission['problem_number']
++        return True
++    
++    def xmlrpc_add_problem(self, problem_args):
++        pprint.pprint(problem_args)
++        if problem_args['type'] != 'exact':
++            # Only exact judgers are supported at the moment.
++            return False
++
++        problem_number = problem_args["problem_number"]
++        input, output = problem_args["input"], problem_args["output"]
++        return True
++
++if __name__ == '__main__':
++    from twisted.internet import reactor
++    r = XMLRPCJudgeInterface()
++    reactor.listenTCP(7080, server.Site(r))
++    reactor.run()
+
+
+Property changes on: trunk/judge/xmlrpc_interface.py
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+Added: trunk/judge/xmlrpc_interface_unittest.py
+===================================================================
+--- trunk/judge/xmlrpc_interface_unittest.py	2005-12-31 05:07:04 UTC (rev 26)
++++ trunk/judge/xmlrpc_interface_unittest.py	2006-01-01 06:00:35 UTC (rev 27)
+@@ -0,0 +1,50 @@
++#!/usr/bin/python
++
++import xmlrpc_interface
++
++import twisted.trial.unittest
++import twisted.internet.reactor
++import twisted.web.server
++import twisted.web.xmlrpc
++
++class XMLRPCInterfaceTestCase(twisted.trial.unittest.TestCase):
++    
++    def setUp(self):
++        # This setUp twisted stuff is just to start the server, ordinarily
++        # the server would be already running, so you don't have to do this.
++        xml_judger = xmlrpc_interface.XMLRPCJudgeInterface()
++        xml_judger_site = twisted.web.server.Site(xml_judger)
++        self.server = twisted.internet.reactor.listenTCP(
++            0, xml_judger_site, interface = '127.0.0.1')
++            
++        self.port = self.server.getHost().port
++                                           
++    def tearDown(self):
++        self.server.stopListening()
++        # I just copied this from twisted/web/test/test_xmlrpc.py...
++        # I don't know why the server iterates...
++        twisted.internet.reactor.iterate()
++        twisted.internet.reactor.iterate()
++
++    def testAddProblems(self):
++        print 'Connecting to server...',
++        server_uri = "http://localhost:%d" % self.port
++        judge_connection = twisted.web.xmlrpc.Proxy(server_uri)
++        print 'Connected'
++        sample_problem_1 = {'problem_number': 1, 'input': '1 2\n3 4\n5 6\n',
++                            'output': '3\n7\n11', 'type': 'exact'}
++        print 'Adding sample problem 1'
++        # This proxy callRemote/deferred stuff is a bit weird.
++        x = judge_connection.callRemote('add_problem', sample_problem_1)
++        self.assertTrue(unittest.deferredResult(x))
++
++        correct_submission = {'code': """import sys
++        for line in sys.stdin:
++           x, y = int(line.split()[0]), int(line.split()[1])
++           print x + y"""}
++        x = judge_connection.callRemote(correct_submission)
++        self.assertTrue(unittest.deferredResult(x))
++
++if __name__ == '__main__':
++    #assert False, "the unittest doesn't actually run"
++    twisted.trial.unittest.main()
+
+
+Property changes on: trunk/judge/xmlrpc_interface_unittest.py
+___________________________________________________________________
+Name: svn:executable
+   + *
+
+
+
+From rrenaud at berlios.de  Sun Jan 15 21:36:55 2006
+From: rrenaud at berlios.de (rrenaud at BerliOS)
+Date: Sun, 15 Jan 2006 21:36:55 +0100
+Subject: [Threec-svn] r28 - trunk/judge
+Message-ID: <200601152036.k0FKatPD007505@sheep.berlios.de>
+
+Author: rrenaud
+Date: 2006-01-15 21:36:55 +0100 (Sun, 15 Jan 2006)
+New Revision: 28
+
+Added:
+   trunk/judge/naked_executor.py
+   trunk/judge/naked_executor_unittest.py
+Removed:
+   trunk/judge/naked_judge.py
+   trunk/judge/naked_judge_unittest.py
+Modified:
+   trunk/judge/TODO
+   trunk/judge/judge_logger.py
+   trunk/judge/xmlrpc_interface_unittest.py
+Log:
+factored code from naked_judge into naked_excutor for re-use with other arbitrary code running stuff
+
+Modified: trunk/judge/TODO
+===================================================================
+--- trunk/judge/TODO	2006-01-01 06:00:35 UTC (rev 27)
++++ trunk/judge/TODO	2006-01-15 20:36:55 UTC (rev 28)
+@@ -2,10 +2,19 @@
+ separable jobs, one is to set up an environment and execute code, which might 
+ be named the Executor infuture versions, the other is two determine of the
+ job actually did what it was supposed to, which itself should be called the
+-Judger.
++Judger.  A judger will have an executor and then apply extra judging logic.
+ 
+-Support running the judger in chroot'ed environment (or split this code into a 
+-new Executor?).  This has it's owndifficulties, since running a chrooted 
+-binary requires that all its dynamic library dependencies are also included 
+-in the chrooted directory.  There is also the problem that some programs 
+-require files at runtine, which are not easily determined with automatically.
+\ No newline at end of file
++Support running the Executor in chroot'ed environment.  This has it's own 
++difficulties, since running a chrooted  binary requires that all its dynamic 
++library dependencies are also included  in the chrooted directory.  There is 
++also the problem that some programs require files at runtine, which are not 
++easily determined automatically.  Move the allow_insecurity = False branch of 
++the NakedExecutor into it's own Executor.
++
++Where is the split between ResourceLimit and Executor?
++
++Change the XML interface to the judge.  There should be a judger state 
++(courtroom?).  The xml interface should just call into the courtroom via
++a thin layer.
++
++Make a JudgeResult class.
+\ No newline at end of file
+
+Modified: trunk/judge/judge_logger.py
+===================================================================
+--- trunk/judge/judge_logger.py	2006-01-01 06:00:35 UTC (rev 27)
++++ trunk/judge/judge_logger.py	2006-01-15 20:36:55 UTC (rev 28)
+@@ -6,8 +6,8 @@
+ import sys
+ 
+ _judge_logger = logging.getLogger('judge')
++_judge_logger.setLevel(logging.ERROR)
++assert not _judge_logger.isEnabledFor(logging.DEBUG)
++_judge_logger.setLevel(logging.DEBUG) # uncomment for more verbose output
+ console = logging.StreamHandler()
+-console.setLevel(logging.ERROR)
+-console.setLevel(logging.DEBUG) # uncomment for more verbose output
+ _judge_logger.addHandler(console)
+-
+
+Copied: trunk/judge/naked_executor.py (from rev 26, trunk/judge/naked_judge.py)
+===================================================================
+--- trunk/judge/naked_judge.py	2005-12-31 05:07:04 UTC (rev 26)
++++ trunk/judge/naked_executor.py	2006-01-15 20:36:55 UTC (rev 28)
+@@ -0,0 +1,187 @@
++#!/usr/bin/python
++
++"""The NakedExecutor is an exector which doesn't use an advanced jailing
++techniques.  Instead it uses as much as protection against rogue code
++as it can muster on a default Unix system.
++
++It should be sufficient for running trusted but possibly stupid code,  but it
++isn't sufficient for running a public contest over the internet."""
++
++import judge_logger
++import resource_limit
++import logging
++import os
++import random
++import resource
++import shutil
++import sys
++import subprocess
++import time
++
++logger = logging.getLogger('judge')
++
++class NakedExecutor:
++    """The NakedExecutor runs code using standard Unix jailing techniques."""
++
++    def __init__(self, allow_insecurity = False):
++        """@param allow_insecurity Should gaping vulnerabilities be allowed?"""
++        self._allow_insecurity = allow_insecurity
++
++    def capture_stdout(self, cmd):
++        """ @return the output of cmd as a string """
++        output, res = self.capture_stdout_and_resource_usage(cmd)
++        return output
++
++    def capture_stdout_and_resource_usage(self, cmd):
++        """ @return tuple containing the output as a string and the
++        resource usage """
++        run_dir = self._get_run_dir()
++        os.mkdir(run_dir)
++        output_file_name = self._get_output_filename()
++        resource_lim = resource_limit.ResourceLimit(cpu_lim = 1,
++                                                    mem_lim = 32 << 20)
++        forked_pid = os.fork()
++        logger.debug("got pid %d" % forked_pid)
++
++        if forked_pid == 0:  # child
++            logger.debug('in child')
++            resource_lim.enforce_limits()
++            self._run_jailed_child_and_exit(cmd, run_dir, output_file_name)
++            assert False, "jailed child should have exited"
++
++        full_output_path = run_dir + '/' + output_file_name
++        logger.debug('parent before wait')
++        ret = os.waitpid(forked_pid, 0)
++        logger.debug('parent after wait, reading from %s' % full_output_path)
++        res_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
++        try:
++            return open(full_output_path, 'r').read(), res_usage
++        except IOError, e:
++            return '', res_usage
++    
++    def _get_run_dir(self):
++        """ @return The directory that this judger should use for its
++        chroot."""
++        # This should be a function of judge id, just use a random name for now
++        return '/tmp/' + str(random.randint(0, 10000000))
++
++    def _get_output_filename(self):
++        return 'actual_out'
++
++    def _executable_in_path(self, filename):
++        """ @return true iff filename is readable and executable in PATH """
++        path = os.getenv('PATH')
++        for prefix in path.split(':'):
++            full_path = os.path.expanduser(prefix + '/' + filename)
++            if os.access(full_path, os.R_OK | os.X_OK):
++                return True
++        return False
++
++    def _chroot_or_chdir(self, dir):
++        """ Change root or change directory to dir.  Chroot is attempted
++        first, since it is much more secure, but chroot requires
++        privileges that usually only root has. """
++        try:
++            os.chroot(dir)
++        except OSError, noperms:
++            if self._allow_insecurity:
++                os.chdir(dir)
++                return
++            raise SecurityException("Judger cannot chroot and refuses to "
++                                    "chdir because insecurity is not allowed")
++
++    def _wait_for_child_and_judge(self, child_pid, expected, full_output_name):
++        pass  # TODO(rrenaud): delete?
++        #time.sleep(.1)
++        # Maybe we should check ret[1], which stores childs exit status.
++
++
++    def _split_arglist(self, arglist):
++        """Split arglist into a list of whitespace delimited strings, except
++        that double quoted substrings are placed in a single element in the
++        returned list, with the quotes removed.
++
++        GOTCHAS: This doesn't group quoted strings which are not
++        'well-delimited'.  By well-delimited, we mean a quoted string whose
++        opening quote is bordered to the left by whitespace, and whose closing
++        quote is bordered to the right by whitespace.
++        f"o" and "fo"o are both not well-delimited.
++
++        Here are a few correct usage input/output to the function.
++        
++        'hi' -> ['hi']
++        'echo 1' -> ['echo', '1']
++        'echo "quoted string" more'  -> ['echo', 'quoted string', 'more']
++        """
++        split_at_space = [x for x in arglist.split(' ') if len(x) > 0]
++        ret = []
++        have_unclosed_quote = False
++        for item in split_at_space:
++            # Special case a quoted string containing no delimiters.
++            if len(item) == 1 and item[0] == '"' and item[-1] == '"':
++                ret.append(item[1:-1])
++                continue
++                
++            if not have_unclosed_quote and item[0] == '"':
++                item = item[1:]
++                # Make an new entry in the list to collect quoted string.
++                ret.append('')  
++                have_unclosed_quote = True
++                
++            if have_unclosed_quote:
++                if len(item) > 0 and item[-1] == '"':
++                    item = item[:-1]
++                    have_unclosed_quote = False
++                if len(ret[-1]) > 0: ret[-1] += ' '
++                ret[-1] += item
++            else:
++                ret.append(item)
++                
++        return ret
++
++    def _run_jailed_child_and_exit(self, cmd, run_dir, output_file_name):
++        try:
++            self._chroot_or_chdir(run_dir)
++            # TODO(rrenaud): support running as a different user,
++            # change to "jailed" user.
++            # Call _exit rather than exit since exit raises a SystemExit,
++            # and we want to be more discrete.  If the ordinary exit is
++            # called, then pyunit will catch systemExit, which causes
++            # the unittest to fail.
++            args = self._split_arglist(cmd)
++            logger.info("running cmd " +  cmd)
++            access_error_msg = "Could find " + args[0] + " in PATH (" + \
++                               os.getenv('PATH') + ")"
++            assert self._executable_in_path(args[0]), access_error_msg
++            judged_proc = subprocess.Popen(args, stdout = subprocess.PIPE,
++                                           close_fds = True)
++            # I thought about using a pipeline for juding and using
++            # return codes for determining correctness, like
++            # ./submitted_binary < file | judger,
++            # but untrusted submitted binary can simply replace the judger
++            # program with 'exit 0' and then their malicious program would
++            # be correct.
++            # To avoid this, the output of the submitted binary is
++            # copied to a file, and then the judger runs from the
++            # parent (protected for the submitted code , hopefully, by
++            # at least a chroot and different user).
++            output_file = open(output_file_name, 'w')
++            shutil.copyfileobj(judged_proc.stdout, output_file)
++            output_file.close()
++            logger.debug('copied to %s/%s' % (run_dir, output_file_name))
++            assert os.access(output_file_name, os.R_OK)
++
++            if logger.isEnabledFor(logging.DEBUG):
++                print 'debugging'
++                logger.debug('Child: file contents %s' % (
++                    open(output_file_name, 'r').read()))
++            os._exit(0)
++        except SecurityException:
++            os._exit(1)
++
++
++            
++class SecurityException(Exception):
++    """ A SecurityException is raised when the judge refuses to continue
++    due to some sort of security violation"""
++    pass
+
+Copied: trunk/judge/naked_executor_unittest.py (from rev 26, trunk/judge/naked_judge_unittest.py)
+===================================================================
+--- trunk/judge/naked_judge_unittest.py	2005-12-31 05:07:04 UTC (rev 26)
++++ trunk/judge/naked_executor_unittest.py	2006-01-15 20:36:55 UTC (rev 28)
+@@ -0,0 +1,52 @@
++#!/usr/bin/python
++
++import os
++import unittest
++import naked_executor
++
++class NakedExecutorTestCase(unittest.TestCase):
++    def setUp(self):
++        if os.getuid() == 0:
++            # We are root, we can use security measures such as chroot,
++            # so insecurity is not allowed.
++            self.executor = naked_executor.NakedExecutor(
++                allow_insecurity = False)
++        else:
++            # We don't have the capabilities to do fancy things, run
++            # insecurely
++            self.executor = naked_executor.NakedExecutor(
++                allow_insecurity = True)
++        
++    def testCaptureStdout(self):
++        self.assertEquals(self.executor.capture_stdout('echo 1'), '1\n')
++        # Since the command passed to judge exact won't do any shell magic,
++        # we fudge a sleep x && echo 10 by writing a short inline python
++        # program.
++        waiter_template_program = '"import time\n' + \
++                                  'start = time.time()\n' + \
++                                  'while time.time() - start < %d: pass\n' + \
++                                  'print 10\n"'
++
++        print_10_quick = 'python -c ' + (waiter_template_program % 0)
++        print_10_slow = 'python -c ' + (waiter_template_program % 2)
++        self.assertEquals(self.executor.capture_stdout(print_10_quick), '10\n')
++        # The second call should timeout.
++        self.assertEquals(self.executor.capture_stdout(print_10_slow), '')
++
++    def testSplitArglist(self):
++        input_output = [
++            ('echo', ['echo']),
++            ('echo 1', ['echo', '1']),
++            ('echo "hi"', ['echo', 'hi']),
++            ('echo "hello 1 2 3"', ['echo', 'hello 1 2 3']),
++            ('echo "hello    1    2 3"', ['echo', 'hello 1 2 3']),
++            ('some "quoted stuff" more  "quoted   stuff"',
++             ['some', 'quoted stuff', 'more', 'quoted stuff'])
++            ]
++        
++        for in_val, out_val in input_output:
++            self.assertEquals(self.executor._split_arglist(in_val), out_val)
++
++
++if __name__ == "__main__":
++    unittest.main()
+
+Deleted: trunk/judge/naked_judge.py
+===================================================================
+--- trunk/judge/naked_judge.py	2006-01-01 06:00:35 UTC (rev 27)
++++ trunk/judge/naked_judge.py	2006-01-15 20:36:55 UTC (rev 28)
+@@ -1,194 +0,0 @@
+-#!/usr/bin/python
+-
+-"""The NakedJudge is a judger which doesn't use an advanced jailing
+-techniques.  Instead it uses as much as protection against rogue code
+-as it can muster on a default Unix system.
+-
+-It should be sufficient for a local contest where the contestants are
+-trusted, but it probably isn't sufficient for running a public contest
+-over the internet."""
+-
+-import judge_logger
+-import resource_limit
+-import logging
+-import os
+-import random
+-import resource
+-import shutil
+-import sys
+-import subprocess
+-import time
+-
+-logger = logging.getLogger('judge')
+-logger.setLevel(logging.DEBUG)
+-
+-class NakedJudge:
+-    """The NakedJudge runs code using standard Unix jailing techniques."""
+-
+-    def __init__(self, allow_insecurity = False):
+-        """@param allow_insecurity Should gaping vulnerabilities be allowed?"""
+-        self._allow_insecurity = allow_insecurity
+-
+-    def judge_exact(self, cmd, expected):
+-        """ @return JudgeResult containing the result of running cmd against
+-        expected output.  Run is successful only if the actual output is
+-        an exact match."""
+-        run_dir = self._get_run_dir()
+-        os.mkdir(run_dir)
+-        output_file_name = self._get_output_filename()
+-        resource_lim = resource_limit.ResourceLimit(cpu_lim = 1,
+-                                                    mem_lim = 32 << 20)
+-        forked_pid = os.fork()
+-        logger.debug("got pid %d" % forked_pid)
+-
+-        if forked_pid:  # parent
+-            full_output_path = run_dir + '/' + output_file_name
+-            return self._wait_for_child_and_judge(forked_pid,
+-                                                  expected, full_output_path)
+-
+-        else:  # child
+-            logger.debug('in child')
+-            resource_lim.enforce_limits()
+-            self._run_jailed_child_and_exit(cmd, run_dir, output_file_name)
+-            assert False, "jailed child should have exited"
+-    
+-    def _get_run_dir(self):
+-        """ @return The directory that this judger should use for its
+-        chroot."""
+-        # This should be a function of judge id, just use a random name for now
+-        return '/tmp/' + str(random.randint(0, 10000000))
+-
+-    def _get_output_filename(self):
+-        return 'actual_out'
+-
+-    def _executable_in_path(self, filename):
+-        """ @return true iff filename is readable and executable in PATH """
+-        path = os.getenv('PATH')
+-        for prefix in path.split(':'):
+-            full_path = os.path.expanduser(prefix + '/' + filename)
+-            if os.access(full_path, os.R_OK | os.X_OK):
+-                return True
+-        return False
+-
+-    def _chroot_or_chdir(self, dir):
+-        """ Change root or change directory to dir.  Chroot is attempted
+-        first, since it is much more secure, but chroot requires
+-        privileges that usually only root has. """
+-        try:
+-            os.chroot(dir)
+-        except OSError, noperms:
+-            if self._allow_insecurity:
+-                os.chdir(dir)
+-                return
+-            raise SecurityException("Judger cannot chroot and refuses to "
+-                                    "chdir because insecurity is not allowed")
+-
+-    def _wait_for_child_and_judge(self, child_pid, expected, full_output_name):
+-        logger.debug('parent before wait')
+-        ret = os.waitpid(child_pid, 0)
+-        logger.debug('parent after wait')
+-        #time.sleep(.1)
+-        # Maybe we should check ret[1], which stores childs exit status.
+-        try:
+-            child_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+-            logger.debug('Parent: reading ' +  full_output_name)
+-            output_lines = open(full_output_name, 'r').readlines()
+-            file_contents = ''.join(output_lines)
+-            if file_contents == expected:
+-                return True
+-            else:
+-                logger.debug("No match actual [[ %s]] and expected [[ %s ]]"
+-                              % (file_contents, expected))
+-                return False
+-
+-        except IOError, e:
+-            logger.debug('in parent of judge_exact' + str(e))
+-            return False  # Couldn't read file?
+-
+-    def _split_arglist(self, arglist):
+-        """Split arglist into a list of whitespace delimited strings, except
+-        that double quoted substrings are placed in a single element in the
+-        returned list, with the quotes removed.
+-
+-        GOTCHAS: This doesn't group quoted strings which are not
+-        'well-delimited'.  By well-delimited, we mean a quoted string whose
+-        opening quote is bordered to the left by whitespace, and whose closing
+-        quote is bordered to the right by whitespace.
+-        f"o" and "fo"o are both not well-delimited.
+-
+-        Here are a few correct usage input/output to the function.
+-        
+-        'hi' -> ['hi']
+-        'echo 1' -> ['echo', '1']
+-        'echo "quoted string" more'  -> ['echo', 'quoted string', 'more']
+-        """
+-        split_at_space = [x for x in arglist.split(' ') if len(x) > 0]
+-        ret = []
+-        have_unclosed_quote = False
+-        for item in split_at_space:
+-            # Special case a quoted string containing no delimiters.
+-            if len(item) == 1 and item[0] == '"' and item[-1] == '"':
+-                ret.append(item[1:-1])
+-                continue
+-                
+-            if not have_unclosed_quote and item[0] == '"':
+-                item = item[1:]
+-                # Make an new entry in the list to collect quoted string.
+-                ret.append('')  
+-                have_unclosed_quote = True
+-                
+-            if have_unclosed_quote:
+-                if len(item) > 0 and item[-1] == '"':
+-                    item = item[:-1]
+-                    have_unclosed_quote = False
+-                if len(ret[-1]) > 0: ret[-1] += ' '
+-                ret[-1] += item
+-            else:
+-                ret.append(item)
+-                
+-        return ret
+-
+-    def _run_jailed_child_and_exit(self, cmd, run_dir, output_file_name):
+-        try:
+-            self._chroot_or_chdir(run_dir)
+-            # change to "judged" user
+-            # Call _exit rather than exit since exit raises a SystemExit,
+-            # and we want to be more discrete.  If the ordinary exit is
+-            # called, then pyunit will catch systemExit, which causes this
+-            # test to fail.
+-            # Maybe we should use subprocess rather than system, so
+-            # no shell calls are performed.
+-            args = self._split_arglist(cmd)
+-            logger.info("running cmd " +  cmd)
+-            access_error_msg = "Could find " + args[0] + " in PATH (" + \
+-                               os.getenv('PATH') + ")"
+-            assert self._executable_in_path(args[0]), access_error_msg
+-            judged_proc = subprocess.Popen(args, stdout = subprocess.PIPE,
+-                                           close_fds = True)
+-            # I thought about using a pipeline for juding and using
+-            # return codes for determining correctness, like
+-            # ./submitted_binary < file | judger,
+-            # but untrusted submitted binary can simply replace the judger
+-            # program with 'exit 0' and then their malicious program would
+-            # be correct.
+-            # To avoid this, the output of the submitted binary is
+-            # copied to a file, and then the judger runs from the
+-            # parent (protected for the submitted code , hopefully, by
+-            # at least a chroot and different user).
+-            output_file = open(output_file_name, 'w')
+-            shutil.copyfileobj(judged_proc.stdout, output_file)
+-            output_file.close()
+-            logger.debug('copied to %s/%s' % (run_dir, output_file_name))
+-            assert os.access(output_file_name, os.R_OK)
+-            logger.debug('Child: file contents %s' % (
+-                open(output_file_name, 'r').read()))
+-            os._exit(0)
+-        except SecurityException:
+-            os._exit(1)
+-
+-
+-            
+-class SecurityException(Exception):
+-    """ A SecurityException is raised when the judge refuses to continue
+-    due to some sort of security violation"""
+-    pass
+
+Deleted: trunk/judge/naked_judge_unittest.py
+===================================================================
+--- trunk/judge/naked_judge_unittest.py	2006-01-01 06:00:35 UTC (rev 27)
++++ trunk/judge/naked_judge_unittest.py	2006-01-15 20:36:55 UTC (rev 28)
+@@ -1,51 +0,0 @@
+-#!/usr/bin/python
+-
+-import os
+-import unittest
+-import naked_judge
+-
+-class NakedJudgeTestCase(unittest.TestCase):
+-    def setUp(self):
+-        if os.getuid() == 0:
+-            # We are root, we can use security measures such as chroot,
+-            # so insecurity is not allowed.
+-            self.judger = naked_judge.NakedJudge(allow_insecurity = False)
+-        else:
+-            # We don't have the capabilities to do fancy things, run
+-            # insecurely
+-            self.judger = naked_judge.NakedJudge(allow_insecurity = True)
+-        
+-    def testAccepted(self):
+-        self.assertTrue(self.judger.judge_exact('echo 1', '1\n'))
+-        self.assertFalse(self.judger.judge_exact('echo 1', '\n'))
+-        # Since the command passed to judge exact won't do any shell magic,
+-        # we fudge a sleep x && echo 10 by writing a short inline python
+-        # program.
+-        waiter_template_program = '"import time\n' + \
+-                                  'start = time.time()\n' + \
+-                                  'while time.time() - start < %d: pass\n' + \
+-                                  'print 10\n"'
+-
+-        prints_10_quickly = 'python -c ' + (waiter_template_program % 0)
+-        prints_10_slowly = 'python -c ' + (waiter_template_program % 2)
+-        self.assertTrue(self.judger.judge_exact(prints_10_quickly, '10\n'))
+-        # The second call should timeout.
+-        self.assertFalse(self.judger.judge_exact(prints_10_slowly, '10\n'))
+-
+-    def testSplitArglist(self):
+-        input_output = [
+-            ('echo', ['echo']),
+-            ('echo 1', ['echo', '1']),
+-            ('echo "hi"', ['echo', 'hi']),
+-            ('echo "hello 1 2 3"', ['echo', 'hello 1 2 3']),
+-            ('echo "hello    1    2 3"', ['echo', 'hello 1 2 3']),
+-            ('some "quoted stuff" more  "quoted   stuff"',
+-             ['some', 'quoted stuff', 'more', 'quoted stuff'])
+-            ]
+-        
+-        for in_val, out_val in input_output:
+-            self.assertEquals(self.judger._split_arglist(in_val), out_val)
+-
+-
+-if __name__ == "__main__":
+-    unittest.main()
+
+Modified: trunk/judge/xmlrpc_interface_unittest.py
+===================================================================
+--- trunk/judge/xmlrpc_interface_unittest.py	2006-01-01 06:00:35 UTC (rev 27)
++++ trunk/judge/xmlrpc_interface_unittest.py	2006-01-15 20:36:55 UTC (rev 28)
+@@ -32,19 +32,26 @@
+         judge_connection = twisted.web.xmlrpc.Proxy(server_uri)
+         print 'Connected'
+         sample_problem_1 = {'problem_number': 1, 'input': '1 2\n3 4\n5 6\n',
+-                            'output': '3\n7\n11', 'type': 'exact'}
++                            'output': '3\n7\n11\n', 'type': 'exact'}
+         print 'Adding sample problem 1'
+         # This proxy callRemote/deferred stuff is a bit weird.
+         x = judge_connection.callRemote('add_problem', sample_problem_1)
+-        self.assertTrue(unittest.deferredResult(x))
++        self.failUnless(twisted.trial.unittest.deferredResult(x))
+ 
+-        correct_submission = {'code': """import sys
+-        for line in sys.stdin:
+-           x, y = int(line.split()[0]), int(line.split()[1])
+-           print x + y"""}
+-        x = judge_connection.callRemote(correct_submission)
+-        self.assertTrue(unittest.deferredResult(x))
++        correct_submission = {'code': "import sys\n"
++                              "for line in sys.stdin:\n"
++                              "     tokens = line.split()\n"
++                              "     x, y = int(tokens[0]), int(tokens[1])\n"
++                              "     print x + y\n",
++                              'problem_number': 1,
++                              }
++        x = judge_connection.callRemote('judge', correct_submission)
++        self.failUnless(twisted.trial.unittest.deferredResult(x))
+ 
+ if __name__ == '__main__':
+-    #assert False, "the unittest doesn't actually run"
+-    twisted.trial.unittest.main()
++    import os
++    import sys
++    # The twisted guys are nuts, I can't figure out how to just run a test
++    # directly from the command line (eg, ./my_unittest.py should run
++    # the testing suite in my_unittest.  I can't figure out how to.  Boggle.
++    os.system('trial ' + sys.argv[0])  
+
+
+

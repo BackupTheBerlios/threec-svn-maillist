@@ -1,0 +1,216 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r20 - trunk/judge
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-November/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r20%20-%20trunk/judge&In-Reply-To=%3C200511120437.jAC4bRnU027658%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000012.html">
+   <LINK REL="Next"  HREF="000014.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r20 - trunk/judge</H1>
+    <B>Robert Renaud at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r20%20-%20trunk/judge&In-Reply-To=%3C200511120437.jAC4bRnU027658%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r20 - trunk/judge">rrenaud at berlios.de
+       </A><BR>
+    <I>Sat Nov 12 05:37:27 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000012.html">[Threec-svn] r19 - in trunk/threec/threec: . templates
+</A></li>
+        <LI>Next message: <A HREF="000014.html">[Threec-svn] r21 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#13">[ date ]</a>
+              <a href="thread.html#13">[ thread ]</a>
+              <a href="subject.html#13">[ subject ]</a>
+              <a href="author.html#13">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: rrenaud
+Date: 2005-11-12 05:37:25 +0100 (Sat, 12 Nov 2005)
+New Revision: 20
+
+Modified:
+   trunk/judge/naked_judge.py
+   trunk/judge/naked_judge_unittest.py
+Log:
+added initial highly sucky and broken judger
+
+Modified: trunk/judge/naked_judge.py
+===================================================================
+--- trunk/judge/naked_judge.py	2005-11-11 04:26:09 UTC (rev 19)
++++ trunk/judge/naked_judge.py	2005-11-12 04:37:25 UTC (rev 20)
+@@ -1,25 +1,30 @@
+ #!/usr/bin/python
+ 
++&quot;&quot;&quot;The NakedJudge is a judger which doesn't use an advanced jailing
++techniques.  Instead it uses as much as protection against rogue code
++as it can muster on a default Unix system.
++
++It should be sufficient for a local contest where the contestants are
++trusted, but it probably isn't sufficient for running a public contest
++over the internet.&quot;&quot;&quot;
++
+ import os
+ import random
+ import resource
+ import sys
+ 
+ class NakedJudge:
+-    &quot;&quot;&quot; The NakedJudge runs code using standard unix jailing techiques.
+-    It should be sufficient for a local contest where the contestants are
+-    trusted, but it probably isn't sufficient for running a public contest
+-    over the internet. &quot;&quot;&quot;
++    &quot;&quot;&quot;The NakedJudge runs code using standard Unix jailing techniques.&quot;&quot;&quot;
+ 
+     def __init__(self, allow_insecurity = False):
++        &quot;&quot;&quot;@param allow_insecurity Should gaping vulnerabilities be allowed?&quot;&quot;&quot;
+         self._allow_insecurity = allow_insecurity
+-
+     
+     def get_run_dir(self):
+-        &quot;&quot;&quot; @return the directory that this judeger should use for its
+-        chroot&quot;&quot;&quot;
++        &quot;&quot;&quot; @return The directory that this judger should use for its
++        chroot.&quot;&quot;&quot;
+         # This should be a function of judge id, just use a random name for now
+-        return os.tmpnam()
++        return '/tmp/' + str(random.randint(0, 10000000))
+ 
+     def get_output_filename(self):
+         return 'actual_out'
+@@ -33,11 +38,13 @@
+         except OSError, noperms:
+             if self._allow_insecurity:
+                 os.chdir(dir)
+-        raise SecurityError
++                return
++            raise SecurityException(&quot;Judger cannot chroot and refuses to&quot;
++                                    &quot;chdir because insecurity is not allowed&quot;)
+ 
+     def judge_exact(self, cmd, expected):
+         &quot;&quot;&quot; @return JudgeResult containing the result of running cmd against
+-        expected output.  Run is successful only if there actual output is
++        expected output.  Run is successful only if the actual output is
+         an exact match.&quot;&quot;&quot;
+         run_dir = self.get_run_dir()
+         os.mkdir(run_dir)
+@@ -47,17 +54,40 @@
+ 
+         if self.child_pid:  # parent
+             ret = os.waitpid(self.child_pid, 1)
+-            print ret
+-            
++            # Maybe we should check ret[1], which stores childs exit status.
++            try:
++                child_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
++                path_to_output = run_dir + '/' + output_file_name
++                output_lines = open(path_to_output, 'r').readlines()
++                file_contents = ''.join(output_lines)
++                if file_contents == expected:
++                    return True
++                else:
++                    print &quot;No match actual [[&quot;, file_contents, &quot;]] and &quot; \
++                          &quot;expected [[&quot;, expected, &quot;]]&quot;
++                    return False
++                
++            except IOError, e:
++                print 'in child of parent of judge_exact', e
++                return False  # Couldn't read file?
++                
+         else:  # child
+-            # set resource limits with resource
+-            self.chroot_or_chdir(run_dir)
++            # set resource limits with resource module
++            try:
++                self.chroot_or_chdir(run_dir)
++                # Call _exit rather than exit since exit raises a SystemExit,
++                # and we want to be more discrete.  If the ordinary exit is
++                # called, then pyunit will catch systemExit, which causes this
++                # test to fail.
++                # Maybe we should use subprocess rather than system, so
++                # no shell calls are performed.
++                os._exit(os.system('(' + cmd + ') &gt;' + output_file_name))
++                #os.sl
++            except SecurityException:
++                os._exit(1)
+ 
+-            os.system(cmd + '&gt;' + output_file_name)
+-            sys.exit(0)
+             
+-            
+-
+-
+-    
+-    
++class SecurityException(Exception):
++    &quot;&quot;&quot; A SecurityException is raised when the judge refuses to continue
++    due to some sort of security violation&quot;&quot;&quot;
++    pass
+
+Modified: trunk/judge/naked_judge_unittest.py
+===================================================================
+--- trunk/judge/naked_judge_unittest.py	2005-11-11 04:26:09 UTC (rev 19)
++++ trunk/judge/naked_judge_unittest.py	2005-11-12 04:37:25 UTC (rev 20)
+@@ -1,15 +1,24 @@
+ #!/usr/bin/python
+ 
++import os
+ import unittest
+ import naked_judge
+ 
+ class NakedJudgeTestCase(unittest.TestCase):
+     def setUp(self):
+-        self.judger = naked_judge.NakedJudge()
++        if os.getuid() == 0:
++            # We are root, we can use security measures such as chroot,
++            # so insecurity is not allowed.
++            self.judger = naked_judge.NakedJudge(allow_insecurity = False)
++        else:
++            # We don't have the capabilities to do fancy things, run
++            # insecurely
++            self.judger = naked_judge.NakedJudge(allow_insecurity = True)
+         
+     def testAccepted(self):
+-        ret = self.judger.judge_exact('echo 1', '\n')
+-        
++        self.assertTrue(self.judger.judge_exact('echo 1', '1\n'))
++        self.assertFalse(self.judger.judge_exact('echo 1', '\n'))
+ 
++
+ if __name__ == &quot;__main__&quot;:
+     unittest.main()
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000012.html">[Threec-svn] r19 - in trunk/threec/threec: . templates
+</A></li>
+	<LI>Next message: <A HREF="000014.html">[Threec-svn] r21 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#13">[ date ]</a>
+              <a href="thread.html#13">[ thread ]</a>
+              <a href="subject.html#13">[ subject ]</a>
+              <a href="author.html#13">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

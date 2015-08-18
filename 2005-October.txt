@@ -1,0 +1,481 @@
+From rrenaud at berlios.de  Tue Oct 25 05:14:16 2005
+From: rrenaud at berlios.de (Robert Renaud at BerliOS)
+Date: Tue, 25 Oct 2005 05:14:16 +0200
+Subject: [Threec-svn] r7 - trunk/threec
+Message-ID: <200510250314.j9P3EGeJ032634@sheep.berlios.de>
+
+Author: rrenaud
+Date: 2005-10-25 05:14:11 +0200 (Tue, 25 Oct 2005)
+New Revision: 7
+
+Modified:
+   trunk/threec/threec-start.py
+Log:
+useless comment to check that the mailing svn change mailing list is working
+
+Modified: trunk/threec/threec-start.py
+===================================================================
+--- trunk/threec/threec-start.py	2005-10-24 03:38:29 UTC (rev 6)
++++ trunk/threec/threec-start.py	2005-10-25 03:14:11 UTC (rev 7)
+@@ -8,6 +8,8 @@
+ # look for setup.py in this directory. If it's not there, this script is
+ # probably installed
+ if exists(join(dirname(__file__), "setup.py")):
++    # change this so that we can get around hard-coding dan's absolute
++    # DB path
+     cherrypy.config.update(file="dev.cfg")
+ else:
+     cherrypy.config.update(file="prod.cfg")
+
+
+
+From rrenaud at berlios.de  Tue Oct 25 05:19:01 2005
+From: rrenaud at berlios.de (Robert Renaud at BerliOS)
+Date: Tue, 25 Oct 2005 05:19:01 +0200
+Subject: [Threec-svn] r8 - in trunk/threec/threec: . templates
+Message-ID: <200510250319.j9P3J1Uj001645@sheep.berlios.de>
+
+Author: rrenaud
+Date: 2005-10-25 05:18:59 +0200 (Tue, 25 Oct 2005)
+New Revision: 8
+
+Removed:
+   trunk/threec/threec/__init__.pyc
+   trunk/threec/threec/controllers.pyc
+   trunk/threec/threec/dataobjects.pyc
+   trunk/threec/threec/model.pyc
+   trunk/threec/threec/templates/__init__.pyc
+   trunk/threec/threec/templates/createuser.pyc
+   trunk/threec/threec/templates/homepage.pyc
+   trunk/threec/threec/templates/login.pyc
+   trunk/threec/threec/templates/master.pyc
+   trunk/threec/threec/templates/userList.pyc
+   trunk/threec/threec/templates/welcome.pyc
+Log:
+removed compiled python files, since they don't belong in the source control system
+
+Deleted: trunk/threec/threec/__init__.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/controllers.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/dataobjects.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/model.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/templates/__init__.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/templates/createuser.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/templates/homepage.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/templates/login.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/templates/master.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/templates/userList.pyc
+===================================================================
+(Binary files differ)
+
+Deleted: trunk/threec/threec/templates/welcome.pyc
+===================================================================
+(Binary files differ)
+
+
+
+From dgott at berlios.de  Wed Oct 26 05:19:59 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Wed, 26 Oct 2005 05:19:59 +0200
+Subject: [Threec-svn] r9 - in trunk/threec: . threec threec/templates
+Message-ID: <200510260319.j9Q3Jx7u015447@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-10-26 05:19:58 +0200 (Wed, 26 Oct 2005)
+New Revision: 9
+
+Modified:
+   trunk/threec/dev.cfg
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/model.py
+   trunk/threec/threec/templates/homepage.kid
+   trunk/threec/threec/templates/login.kid
+   trunk/threec/threec/templates/master.kid
+Log:
+I think things still work but i generalized messages to see if I could and changed/updated the database
+
+Modified: trunk/threec/dev.cfg
+===================================================================
+--- trunk/threec/dev.cfg	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/dev.cfg	2005-10-26 03:19:58 UTC (rev 9)
+@@ -2,9 +2,15 @@
+ 
+ [global]
+ server.environment="development"
+-autoreload.package="ccubed"
++autoreload.package="threec"
+ 
+ # pick the form for your database
+ # sqlobject.dburi="postgres://username at hostname/databasename"
+ # sqlobject.dburi="mysql://username:password at hostname:port/databasename"
+ sqlobject.dburi="sqlite:///Users/dgott/programming/python/threec/alldata.db"
++
++[session]
++storeageType="ram"
++cookieName="C^3-Session-ID"
++timeout=60
++cleanUpDelay=60
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/controllers.py	2005-10-26 03:19:58 UTC (rev 9)
+@@ -88,20 +88,26 @@
+     def confirm(self,passwdchk,email):
+ 	return dict()
+ 
+-    @turbogears.expose(html='threec.templates.login')
++    @turbogears.expose(html='threec.templates.homepage')
+     def login(self,user,passwd):
++	message = []
++	ret = {'message':message}
++
+ 	try:
+ 	    user = User.byUser(user)
+ 	except SQLObjectNotFound:
+-	    raise cherrypy.HTTPRedirect('/createuser?')
++	    message.append('That is an invalid Username/Password')
++	    return ret
+ 
+ 	if sha.sha(passwd).hexdigest() == user.passwd:
+ 	    #create a session
+ 	    pass
+ 	else:
+-	    raise cherrypy.HTTPRedirect('/index?unknown=true' % user)
++	    message.append('That is an invalid Username/Password')
++	    return ret
+ 
+-	return 'Logged in successfully'
++	message.append('You have successfully logged in')
++	return ret
+ 
+     #@turbogears.expose(html="threec.templates.homepage")
+     #def searchuser(self,username="Unknown"):
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/model.py	2005-10-26 03:19:58 UTC (rev 9)
+@@ -2,31 +2,65 @@
+ from turbogears.database import AutoConnectHub
+ 
+ hub = AutoConnectHub()
++'''I don't think these all need to have _connection = hub, I dont think we will be using a lot of
++transactions'''
+ 
+ class User(SQLObject):
++    '''Self explanatory'''
+     _connection = hub
+     user = StringCol(alternateID=True,length=15)
+     email = StringCol(length=40)
+     passwd = StringCol(length=40)
+     
+ class Contest(SQLObject):
++    '''The basic data for each individual contest - Non-contest times are really a special case contest?'''
+     _connection = hub
+     start = DateTimeCol()
+     end = DateTimeCol()
+     name = StringCol(length=20)
+     problemset = IntCol()
++    creator = StringCol()
+ 
++class ContestLog(SQLObject):
++    '''A contest is a series of submissions - Non-contest submissions is really just a special case contest?'''
++    _connection = hub
++    contestName = StringCol()
++    submission = IntCol()
++
++class ContestProblemMapping(SQLObject):
++    '''Provides a mapping from contests to problems and vice versa.  Using the power of
++    SQLObject that puts the objects in here for convenience'''
++    contestName = StringCol(length=20)
++    problemName = StringCol()
++    def getContest(problem):
++	pass
++    
++    def getProblems(contest):
++	pass
++
+ class Problems(SQLObject):
++    '''Each problem gets an entry in here'''
+     _connection = hub
+-    problem = IntCol()
+-    problemset = IntCol()
+-    problemstmt = StringCol()
++    author = StringCol()
++    problemName = StringCol()
++    problemUrl = StringCol()
+     timelimit = IntCol()
+     memlimit = IntCol()
+     correctness = IntCol()
+     altjudgerprogram = StringCol(default=None)
+ 
+ class Page(SQLObject):
++    '''Intended to hold wiki data - No idea if we want/need this'''
+     _connection = hub
+     pagename = StringCol(alternateID=True,length=40)
+     data = StringCol()
++
++class Submission(SQLObject):
++    '''I think it would be better to just log all submissions which contests can store the ID to'''
++    user = StringCol(length=15)
++    problem = IntCol()
++    code = StringCol()
++    response = StringCol(length=10)
++    speed = IntCol()
++    memory = IntCol()
++    time = DateTimeCol()
+
+Modified: trunk/threec/threec/templates/homepage.kid
+===================================================================
+--- trunk/threec/threec/templates/homepage.kid	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/templates/homepage.kid	2005-10-26 03:19:58 UTC (rev 9)
+@@ -1,15 +1,7 @@
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
++      py:extends="'master.kid'">
+ 
+-<?python
+-try:
+-   if message:
+-      pass
+-except NameError:
+-   message = []
+-print 'all ok'
+-?>
+-
+   <head>
+     <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+     <title>Welcome to the Collaborative Coding Contest Homepage</title>
+@@ -22,14 +14,6 @@
+       <input type="submit" value="Create" /><br/>
+     </form>
+     
+-<!--
+-    <span py:replace="message">Message</span>
+-!-->
+-
+-    <span py:for="msg in message">
+-      <p py:content="msg">Message to be displayed</p>
+-    </span>
+-
+     Login<br/>
+     <form action="login" method="post">
+       Name:<textarea name="user" rows="1" cols="15"></textarea><br/>
+
+Modified: trunk/threec/threec/templates/login.kid
+===================================================================
+--- trunk/threec/threec/templates/login.kid	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/templates/login.kid	2005-10-26 03:19:58 UTC (rev 9)
+@@ -8,7 +8,6 @@
+   </head>
+ 
+   <body>
+-
+     <form action="createuser" method="post">
+       Username:<textarea name="user" rows="1" cols="15"></textarea><br/>
+       Password:<input type="password" name="passwd" rows="1" cols="15"></textarea><br/>
+
+Modified: trunk/threec/threec/templates/master.kid
+===================================================================
+--- trunk/threec/threec/templates/master.kid	2005-10-25 03:18:59 UTC (rev 8)
++++ trunk/threec/threec/templates/master.kid	2005-10-26 03:19:58 UTC (rev 9)
+@@ -1,16 +1,28 @@
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+ <html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#">
+ 
++
++
+ <head>
+-    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+-    <title>Your title goes here</title>
++  <title>Testing</title>
+ </head>
+ 
+-<body py:match="item.tag=='{http://www.w3.org/1999/xhtml}body'">
+-    <h1>TurboGears is Running</h1>
+-    
+-    <!-- <div py:if="turbogearsflash" class="flash" py:content="turbogearsflash"></div> !-->
+-    
+-    <div py:replace="item[:]"/>
++<body py:match="item.tag == '{http://www.w3.org/1999/xhtml}body'"> 
++
++<?python
++try:
++   if message:
++      pass
++except NameError:
++   message = []
++
++print 'this works'
++print message
++?>
++
++  <span py:for="msg in message">
++    <p py:content="msg">Message to be displayed</p>
++  </span>
++  <div py:replace="item[:]"> </div>
+ </body>
+ </html>
+
+
+
+From dgott at berlios.de  Fri Oct 28 05:20:35 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Fri, 28 Oct 2005 05:20:35 +0200
+Subject: [Threec-svn] r10 - in trunk/threec: . threec
+Message-ID: <200510280320.j9S3KZcN019647@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-10-28 05:20:33 +0200 (Fri, 28 Oct 2005)
+New Revision: 10
+
+Modified:
+   trunk/threec/alldata.db
+   trunk/threec/dev.cfg
+   trunk/threec/threec/model.py
+Log:
+Updated database thinger
+
+Modified: trunk/threec/alldata.db
+===================================================================
+(Binary files differ)
+
+Modified: trunk/threec/dev.cfg
+===================================================================
+--- trunk/threec/dev.cfg	2005-10-26 03:19:58 UTC (rev 9)
++++ trunk/threec/dev.cfg	2005-10-28 03:20:33 UTC (rev 10)
+@@ -7,7 +7,7 @@
+ # pick the form for your database
+ # sqlobject.dburi="postgres://username at hostname/databasename"
+ # sqlobject.dburi="mysql://username:password at hostname:port/databasename"
+-sqlobject.dburi="sqlite:///Users/dgott/programming/python/threec/alldata.db"
++sqlobject.dburi="sqlite:///Users/dgott/programming/python/threec/trunk/threec/alldata.db"
+ 
+ [session]
+ storeageType="ram"
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-10-26 03:19:58 UTC (rev 9)
++++ trunk/threec/threec/model.py	2005-10-28 03:20:33 UTC (rev 10)
+@@ -11,6 +11,8 @@
+     user = StringCol(alternateID=True,length=15)
+     email = StringCol(length=40)
+     passwd = StringCol(length=40)
++    contests_hosting = MultipleJoin('Contest')
++    submissions = MultipleJoin('Submission')
+     
+ class Contest(SQLObject):
+     '''The basic data for each individual contest - Non-contest times are really a special case contest?'''
+@@ -18,27 +20,11 @@
+     start = DateTimeCol()
+     end = DateTimeCol()
+     name = StringCol(length=20)
+-    problemset = IntCol()
++    problemset = MultipleJoin('Problem')
++    submission = MultipleJoin('Submission')
+     creator = StringCol()
+ 
+-class ContestLog(SQLObject):
+-    '''A contest is a series of submissions - Non-contest submissions is really just a special case contest?'''
+-    _connection = hub
+-    contestName = StringCol()
+-    submission = IntCol()
+-
+-class ContestProblemMapping(SQLObject):
+-    '''Provides a mapping from contests to problems and vice versa.  Using the power of
+-    SQLObject that puts the objects in here for convenience'''
+-    contestName = StringCol(length=20)
+-    problemName = StringCol()
+-    def getContest(problem):
+-	pass
+-    
+-    def getProblems(contest):
+-	pass
+-
+-class Problems(SQLObject):
++class Problem(SQLObject):
+     '''Each problem gets an entry in here'''
+     _connection = hub
+     author = StringCol()
+@@ -49,18 +35,20 @@
+     correctness = IntCol()
+     altjudgerprogram = StringCol(default=None)
+ 
+-class Page(SQLObject):
+-    '''Intended to hold wiki data - No idea if we want/need this'''
+-    _connection = hub
+-    pagename = StringCol(alternateID=True,length=40)
+-    data = StringCol()
+-
+ class Submission(SQLObject):
+     '''I think it would be better to just log all submissions which contests can store the ID to'''
+-    user = StringCol(length=15)
+-    problem = IntCol()
++    user = ForeignKey('User')
++    problem = ForeignKey('Problem')
+     code = StringCol()
+     response = StringCol(length=10)
+     speed = IntCol()
+     memory = IntCol()
+     time = DateTimeCol()
++    contest = ForeignKey('Contest')
++
++class Page(SQLObject):
++    '''Intended to hold wiki data - No idea if we want/need this'''
++    _connection = hub
++    pagename = StringCol(alternateID=True,length=40)
++    data = StringCol()
++
+
+
+
+From dgott at berlios.de  Fri Oct 28 05:20:53 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Fri, 28 Oct 2005 05:20:53 +0200
+Subject: [Threec-svn] r11 - trunk/threec
+Message-ID: <200510280320.j9S3Kr35019742@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-10-28 05:20:52 +0200 (Fri, 28 Oct 2005)
+New Revision: 11
+
+Removed:
+   trunk/threec/alldata.db
+Log:
+thats not my fault
+
+Deleted: trunk/threec/alldata.db
+===================================================================
+(Binary files differ)
+
+
+

@@ -1,0 +1,82 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r7 - trunk/threec
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-October/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r7%20-%20trunk/threec&In-Reply-To=%3C200510250314.j9P3EGeJ032634%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   
+   <LINK REL="Next"  HREF="000001.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r7 - trunk/threec</H1>
+    <B>Robert Renaud at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r7%20-%20trunk/threec&In-Reply-To=%3C200510250314.j9P3EGeJ032634%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r7 - trunk/threec">rrenaud at berlios.de
+       </A><BR>
+    <I>Tue Oct 25 05:14:16 CEST 2005</I>
+    <P><UL>
+        
+        <LI>Next message: <A HREF="000001.html">[Threec-svn] r8 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#0">[ date ]</a>
+              <a href="thread.html#0">[ thread ]</a>
+              <a href="subject.html#0">[ subject ]</a>
+              <a href="author.html#0">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: rrenaud
+Date: 2005-10-25 05:14:11 +0200 (Tue, 25 Oct 2005)
+New Revision: 7
+
+Modified:
+   trunk/threec/threec-start.py
+Log:
+useless comment to check that the mailing svn change mailing list is working
+
+Modified: trunk/threec/threec-start.py
+===================================================================
+--- trunk/threec/threec-start.py	2005-10-24 03:38:29 UTC (rev 6)
++++ trunk/threec/threec-start.py	2005-10-25 03:14:11 UTC (rev 7)
+@@ -8,6 +8,8 @@
+ # look for setup.py in this directory. If it's not there, this script is
+ # probably installed
+ if exists(join(dirname(__file__), &quot;setup.py&quot;)):
++    # change this so that we can get around hard-coding dan's absolute
++    # DB path
+     cherrypy.config.update(file=&quot;dev.cfg&quot;)
+ else:
+     cherrypy.config.update(file=&quot;prod.cfg&quot;)
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	
+	<LI>Next message: <A HREF="000001.html">[Threec-svn] r8 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#0">[ date ]</a>
+              <a href="thread.html#0">[ thread ]</a>
+              <a href="subject.html#0">[ subject ]</a>
+              <a href="author.html#0">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

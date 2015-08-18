@@ -1,0 +1,295 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r21 - in trunk/threec/threec: . templates
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-November/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r21%20-%20in%20trunk/threec/threec%3A%20.%20templates&In-Reply-To=%3C200511120631.jAC6Vekl003500%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000013.html">
+   <LINK REL="Next"  HREF="000015.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r21 - in trunk/threec/threec: . templates</H1>
+    <B>Daniel Gottlieb at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r21%20-%20in%20trunk/threec/threec%3A%20.%20templates&In-Reply-To=%3C200511120631.jAC6Vekl003500%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r21 - in trunk/threec/threec: . templates">dgott at berlios.de
+       </A><BR>
+    <I>Sat Nov 12 07:31:40 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000013.html">[Threec-svn] r20 - trunk/judge
+</A></li>
+        <LI>Next message: <A HREF="000015.html">[Threec-svn] r22 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#14">[ date ]</a>
+              <a href="thread.html#14">[ thread ]</a>
+              <a href="subject.html#14">[ subject ]</a>
+              <a href="author.html#14">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dgott
+Date: 2005-11-12 07:31:37 +0100 (Sat, 12 Nov 2005)
+New Revision: 21
+
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/model.py
+   trunk/threec/threec/templates/editcontest.kid
+Log:
+not too shabby
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-12 04:37:25 UTC (rev 20)
++++ trunk/threec/threec/controllers.py	2005-11-12 06:31:37 UTC (rev 21)
+@@ -24,18 +24,83 @@
+ 
+     return True
+ 
++def problemUrl(id):
++    volume = id / 1000 + 1
++    problem = id % 1000
++    problem = str(problem)
++
++    if(int(problem) &lt; 100):
++	problem = '0' + problem
++    if(int(problem) &lt; 10):
++	problem = '0' + problem
++
++    return '<A HREF="http://localhost:8080/problems/">http://localhost:8080/problems/</A>' + 'i'*(volume) + '/' + problem + '/'
++
++def pageName(id):
++    #base = '<A HREF="http://localhost:8080/problems/">http://localhost:8080/problems/</A>'
++    volume = id / 1000 + 1
++    problem = id % 1000
++    problem = str(problem)
++
++    if(int(problem) &lt; 100):
++	problem = '0' + problem
++    if(int(problem) &lt; 10):
++	problem = '0' + problem
++
++    base = 'i'*volume + '_' + problem
++    return base
++
++def html(problemName,problemStmt):
++    ret = '&lt;html&gt;&lt;head&gt;' + problemName + '&lt;/head&gt;&lt;body&gt;' + problemStmt + '&lt;/body&gt;&lt;/html&gt;'
++    return ret
++
+ class Root:
+ 
+     @turbogears.expose(html='threec.templates.editcontest')
+-    def savecontest(self,user,name,syear,smonth,sday,shour,smin,eyear,emonth,eday,ehour,emin):
++    def remove(self,userId,contestId,problemId):
++	Problem.delete(problemId)
++	return self.editcontest(contestId,userId)
++
++    @turbogears.expose(html='threec.templates.editcontest')
++    def addproblem(self,name,author,stmt,time,memory,correct,contestId,userId):
++	problem = Problem(problemName=name,timelimit=int(time),memlimit=int(memory),correctness=int(correct),author=author,contest=Contest.get(contestId))
++	page = Page(pagename=pageName(problem.id),data=html(name,stmt))
++	problem.problemUrl = problemUrl(problem.id)
++	return self.editcontest(contestId,userId)
++
++    @turbogears.expose(html='threec.templates.editcontest')
++    def savecontest(self,userId,contestId,name,syear,smonth,sday,shour,smin,eyear,emonth,eday,ehour,emin):
++	syear = int(syear);smonth=int(smonth);sday=int(sday);shour=int(shour);smin=int(smin)
++	eyear = int(eyear);emonth=int(emonth);eday=int(eday);ehour=int(ehour);emin=int(emin)
++
+ 	start = datetime.datetime(syear,smonth,sday,shour)
+ 	end = datetime.datetime(eyear,emonth,eday,ehour)
+-	contest = Contest(start=start,end=end,name=name,user=user)
++
++	contestId = int(contestId)
++
++	if(start &gt; end):
++	    message = ['The start datetime must be before the end datetime']
++	    if contestId:
++		problemset = Contest.get(contestId).problemset
++	    else:
++		problemset = []
++	    return dict(name=name,message=message,start=start,end=end,userId=userId,contestId=contestId,problemset=problemset)
++
++	if contestId:
++	    contest = Contest.get(contestId)
++	    contest.set(start=start,end=end)
++	else:
++	    contest = Contest(start=start,end=end,name=name,user=userId)
++	    contestId = contest.id
++
+ 	ret = {}
+ 	ret['name']=name
+ 	ret['start']=start
+ 	ret['end']=end
+-	ret['user']=user
++	ret['userId']=userId
++	ret['problemset']=contest.problemset
++	ret['contestId']=contestId
++
+ 	return ret
+ 
+     @turbogears.expose(html=&quot;threec.templates.homepage&quot;)
+@@ -52,10 +117,9 @@
+     def editcontest(self,contestId,userId):
+ 	contestId = int(contestId)
+ 	name = ''
+-	start = ''
+-	end = ''
++	start = datetime.datetime.now()
++	end = datetime.datetime.now()
+ 	problems = []
+-	ret = {'name':name,'start':start,'end':end,'problemset':problems,'user':userId}
+ 
+ 	if contestId:
+ 	    contest = Contest.get(contestId)
+@@ -64,6 +128,8 @@
+ 	    end = contest.end
+ 	    problems = contest.problemset
+ 
++	ret = {'name':name,'start':start,'end':end,'problemset':problems,'userId':userId,'contestId':contestId}
++
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.hosting')
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-11-12 04:37:25 UTC (rev 20)
++++ trunk/threec/threec/model.py	2005-11-12 06:31:37 UTC (rev 21)
+@@ -26,7 +26,7 @@
+     '''Each problem gets an entry in here'''
+     _connection = hub
+     author = StringCol(notNone=True)
+-    problemName = StringCol(notNone=True)
++    problemName = StringCol(notNone=True,unique=True)
+     problemUrl = StringCol(default='/searchProblems')
+     timelimit = IntCol(default=10)
+     memlimit = IntCol(default=512)
+
+Modified: trunk/threec/threec/templates/editcontest.kid
+===================================================================
+--- trunk/threec/threec/templates/editcontest.kid	2005-11-12 04:37:25 UTC (rev 20)
++++ trunk/threec/threec/templates/editcontest.kid	2005-11-12 06:31:37 UTC (rev 21)
+@@ -7,48 +7,52 @@
+     &lt;title&gt;Edit A Contest&lt;/title&gt;
+ &lt;/head&gt;
+ 
++&lt;?python
++   import datetime
++   year = int(datetime.datetime.now().year)
++?&gt;
++
+ &lt;body&gt;
+ 
+   &lt;form action=&quot;savecontest&quot; method=&quot;post&quot;&gt; 
+     Name:&lt;textarea rows=&quot;1&quot; name=&quot;name&quot;&gt;${name}&lt;/textarea&gt;&lt;br /&gt;
+     Start:
+     &lt;select name=&quot;syear&quot;&gt;
+-      &lt;option value=&quot;2005&quot;&gt;2005&lt;/option&gt;
+-      &lt;option value=&quot;2005&quot;&gt;2006&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(2)&quot; py:attrs=&quot;dict(value=x+year,selected=(start.year==(x+year) and 'selected' or None))&quot;&gt;${x+year}&lt;/option&gt;
+     &lt;/select&gt;
+     &lt;select name=&quot;smonth&quot; selected=&quot;11&quot;&gt;
+-      &lt;option py:for=&quot;x in range(12)&quot; value=&quot;${x+1}&quot;&gt;${x+1}&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(12)&quot; py:attrs=&quot;dict(value=x+1,selected=(start.month==(x+1) and 'selected' or None))&quot;&gt;${x+1}&lt;/option&gt;
+     &lt;/select&gt;
+     &lt;select name=&quot;sday&quot;&gt;
+-      &lt;option py:for=&quot;x in range(30)&quot; value=&quot;${x+1}&quot;&gt;${x+1}&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(30)&quot; py:attrs=&quot;dict(value=x+1,selected=(start.day==(x+1) and 'selected' or None))&quot;&gt;${x+1}&lt;/option&gt;
+     &lt;/select&gt;
+     &lt;select name=&quot;shour&quot;&gt;
+-      &lt;option py:for=&quot;x in range(24)&quot; value=&quot;${x}&quot;&gt;${x}&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(24)&quot; py:attrs=&quot;dict(value=x,selected=(start.hour==(x) and 'selected' or None))&quot;&gt;${x}&lt;/option&gt;
+     &lt;/select&gt;
+     &lt;select name=&quot;smin&quot;&gt;
+-      &lt;option py:for=&quot;x in range(60)&quot; value=&quot;${x}&quot;&gt;${x}&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(60)&quot; py:attrs=&quot;dict(value=x,selected=(start.minute==(x) and 'selected' or None))&quot;&gt;${x}&lt;/option&gt;
+     &lt;/select&gt;
+ 
+     &lt;br /&gt;End:
+     &lt;select name=&quot;eyear&quot;&gt;
+-      &lt;option value=&quot;2005&quot;&gt;2005&lt;/option&gt;
+-      &lt;option value=&quot;2005&quot;&gt;2006&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(2)&quot; py:attrs=&quot;dict(value=x+year,selected=(end.year==(x+year) and 'selected' or None))&quot;&gt;${x+year}&lt;/option&gt;
+     &lt;/select&gt;
+     &lt;select name=&quot;emonth&quot;&gt;
+-      &lt;option py:for=&quot;x in range(12)&quot; value=&quot;${x+1}&quot;&gt;${x+1}&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(12)&quot; py:attrs=&quot;dict(value=x+1,selected=(end.month==(x+1) and 'selected' or None))&quot;&gt;${x+1}&lt;/option&gt;
+     &lt;/select&gt;
+     &lt;select name=&quot;eday&quot;&gt;
+-      &lt;option py:for=&quot;x in range(30)&quot; value=&quot;${x+1}&quot;&gt;${x+1}&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(30)&quot; py:attrs=&quot;dict(value=x+1,selected=(end.day==(x+1) and 'selected' or None))&quot;&gt;${x+1}&lt;/option&gt;
+     &lt;/select&gt;
+     &lt;select name=&quot;ehour&quot;&gt;
+-      &lt;option py:for=&quot;x in range(24)&quot; value=&quot;${x}&quot;&gt;${x}&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(24)&quot; py:attrs=&quot;dict(value=x,selected=(end.hour==(x) and 'selected' or None))&quot;&gt;${x}&lt;/option&gt;
+     &lt;/select&gt;
+     &lt;select name=&quot;emin&quot;&gt;
+-      &lt;option py:for=&quot;x in range(60)&quot; value=&quot;${x}&quot;&gt;${x}&lt;/option&gt;
++      &lt;option py:for=&quot;x in range(60)&quot; py:attrs=&quot;dict(value=x,selected=(end.minute==(x) and 'selected' or None))&quot;&gt;${x}&lt;/option&gt;
+     &lt;/select&gt;
+ 
+-    &lt;input type=&quot;hidden&quot; name=&quot;userId&quot; value=&quot;${user}&quot; /&gt;
+-    &lt;br /&gt;&lt;input type=&quot;submit&quot; name=&quot;submit&quot; value=&quot;Save&quot;/&gt; 
++    &lt;input type=&quot;hidden&quot; name=&quot;userId&quot; value=&quot;${userId}&quot; /&gt;
++    &lt;input type=&quot;hidden&quot; name=&quot;contestId&quot; value=&quot;${contestId}&quot; /&gt;
++    &lt;br /&gt;&lt;input type=&quot;submit&quot; value=&quot;Save&quot;/&gt; 
+   &lt;/form&gt;
+   
+   &lt;table&gt;
+@@ -58,17 +62,20 @@
+     &lt;hr /&gt;
+     &lt;tr py:for=&quot;prob in problemset&quot;&gt;
+       &lt;td&gt;&lt;a href=&quot;${prob.problemUrl}&quot;&gt;${prob.problemName}&lt;/a&gt;&lt;/td&gt;
+-      &lt;td&gt;&lt;a href=&quot;/remove?problem=${prob.id}&quot;&gt;Remove&lt;/a&gt;&lt;/td&gt;
++      &lt;td&gt;&lt;a href=&quot;/remove?problemId=${prob.id}&amp;userId=${userId}&amp;contestId=${contestId}&quot;&gt;Remove&lt;/a&gt;&lt;/td&gt;
+     &lt;/tr&gt;
+   &lt;/table&gt;
+   
+   &lt;form action=&quot;addproblem&quot; method=&quot;post&quot;&gt;
+     Name:&lt;textarea rows=&quot;1&quot; name=&quot;name&quot;&gt;&lt;/textarea&gt;&lt;br /&gt;
++    Author:&lt;textarea rows=&quot;1&quot; name=&quot;author&quot;&gt;&lt;/textarea&gt;&lt;br /&gt;
+     Statement:&lt;textarea rows=&quot;1&quot; name=&quot;stmt&quot;&gt;&lt;/textarea&gt;&lt;br /&gt;
+     Time Limit:&lt;textarea rows=&quot;1&quot; name=&quot;time&quot;&gt;10&lt;/textarea&gt;&lt;br /&gt;
+     Memory Limit:&lt;textarea rows=&quot;1&quot; name=&quot;memory&quot;&gt;100&lt;/textarea&gt;&lt;br /&gt;
+     Correctness:&lt;textarea rows=&quot;1&quot; name=&quot;correct&quot;&gt;100&lt;/textarea&gt;&lt;br /&gt;
+-    &lt;input type=&quot;submit&quot; name=&quot;submit&quot; value=&quot;Add Problem to Contest&quot;/&gt;
++    &lt;input type=&quot;hidden&quot; name=&quot;userId&quot; value=&quot;${userId}&quot; /&gt;
++    &lt;input type=&quot;hidden&quot; name=&quot;contestId&quot; value=&quot;${contestId}&quot; /&gt;
++    &lt;input type=&quot;submit&quot; value=&quot;Add Problem to Contest&quot;/&gt;
+   &lt;/form&gt;
+ 
+ &lt;/body&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000013.html">[Threec-svn] r20 - trunk/judge
+</A></li>
+	<LI>Next message: <A HREF="000015.html">[Threec-svn] r22 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#14">[ date ]</a>
+              <a href="thread.html#14">[ thread ]</a>
+              <a href="subject.html#14">[ subject ]</a>
+              <a href="author.html#14">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

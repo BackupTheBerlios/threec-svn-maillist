@@ -1,0 +1,210 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r18 - trunk/threec/threec/templates
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-November/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r18%20-%20trunk/threec/threec/templates&In-Reply-To=%3C200511100533.jAA5Xdhx005594%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000011.html">
+   <LINK REL="Next"  HREF="000012.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r18 - trunk/threec/threec/templates</H1>
+    <B>Daniel Gottlieb at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r18%20-%20trunk/threec/threec/templates&In-Reply-To=%3C200511100533.jAA5Xdhx005594%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r18 - trunk/threec/threec/templates">dgott at berlios.de
+       </A><BR>
+    <I>Thu Nov 10 06:33:39 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000011.html">[Threec-svn] r17 - in trunk/threec/threec: . templates
+</A></li>
+        <LI>Next message: <A HREF="000012.html">[Threec-svn] r19 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#10">[ date ]</a>
+              <a href="thread.html#10">[ thread ]</a>
+              <a href="subject.html#10">[ subject ]</a>
+              <a href="author.html#10">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dgott
+Date: 2005-11-10 06:33:37 +0100 (Thu, 10 Nov 2005)
+New Revision: 18
+
+Added:
+   trunk/threec/threec/templates/editcontest.kid
+   trunk/threec/threec/templates/hosting.kid
+   trunk/threec/threec/templates/managecontests.kid
+   trunk/threec/threec/templates/userlist.kid
+Log:
+oops added files
+
+Added: trunk/threec/threec/templates/editcontest.kid
+===================================================================
+--- trunk/threec/threec/templates/editcontest.kid	2005-11-10 05:31:36 UTC (rev 17)
++++ trunk/threec/threec/templates/editcontest.kid	2005-11-10 05:33:37 UTC (rev 18)
+@@ -0,0 +1,37 @@
++&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;<A HREF="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd</A>&quot;&gt;
++&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot;
++    py:extends=&quot;'master.kid'&quot;&gt;
++
++&lt;head&gt;
++    &lt;meta content=&quot;text/html; charset=UTF-8&quot; http-equiv=&quot;content-type&quot; /&gt;
++    &lt;title&gt;Edit A Contest&lt;/title&gt;
++&lt;/head&gt;
++
++&lt;body&gt;
++
++  &lt;form action=&quot;savecontest&quot; method=&quot;post&quot;&gt; 
++    Name:&lt;textarea name=&quot;name&quot;&gt;${name}&lt;/textarea&gt;&lt;br /&gt;
++    Start:&lt;br /&gt;End:&lt;br /&gt;
++    &lt;input type=&quot;submit&quot; name=&quot;submit&quot; value=&quot;Save&quot;/&gt; 
++  &lt;/form&gt; 
++  
++  &lt;table&gt;
++    &lt;tr&gt;
++      &lt;td&gt;Problem&lt;/td&gt;&lt;td&gt;Remove&lt;/td&gt;
++    &lt;/tr&gt;
++    &lt;tr py:for=&quot;prob in problemset&quot;&gt;
++      &lt;td&gt;&lt;a href=&quot;${prob.problemUrl}&quot;&gt;${prob.problemName}&lt;/a&gt;&lt;/td&gt;
++      &lt;td&gt;&lt;a href=&quot;/remove?problem=${prob.id}&quot;&gt;Remove&lt;/a&gt;&lt;/td&gt;
++    &lt;/tr&gt;
++    
++    &lt;form action=&quot;addproblem&quot; method=&quot;post&quot;&gt;
++      Name:&lt;textarea name=&quot;name&quot;&gt;&lt;/textarea&gt;&lt;br /&gt;
++      Time Limit:&lt;textarea name=&quot;time&quot;&gt;10&lt;/textarea&gt;&lt;br /&gt;
++      Memory Limit:&lt;textarea name=&quot;memory&quot;&gt;100&lt;/textarea&gt;&lt;br /&gt;
++      Correctness:&lt;textarea name=&quot;correct&quot;&gt;100&lt;/textarea&gt;&lt;br /&gt;
++      &lt;input type=&quot;submit&quot; name=&quot;submit&quot; value=&quot;Add Contest&quot;/&gt;
++    &lt;/form&gt;
++  &lt;/table&gt;
++  
++&lt;/body&gt;
++&lt;/html&gt;
+
+Added: trunk/threec/threec/templates/hosting.kid
+===================================================================
+--- trunk/threec/threec/templates/hosting.kid	2005-11-10 05:31:36 UTC (rev 17)
++++ trunk/threec/threec/templates/hosting.kid	2005-11-10 05:33:37 UTC (rev 18)
+@@ -0,0 +1,23 @@
++&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;<A HREF="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd</A>&quot;&gt;
++&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot; py:extends=&quot;'master.kid'&quot;&gt;
++
++  &lt;head&gt;
++    &lt;meta content=&quot;text/html; charset=UTF-8&quot; http-equiv=&quot;content-type&quot; /&gt;
++    &lt;title&gt;Welcome to the Collaborative Coding Contest Hosting Page&lt;/title&gt;
++  &lt;/head&gt;
++
++  &lt;body&gt;
++    
++    Login&lt;br/&gt;
++    Information must be entered because I don't have sessions enabled yet&lt;br/&gt;
++    &lt;form action=&quot;hostcontest&quot; method=&quot;post&quot;&gt;
++      Name:&lt;textarea name=&quot;user&quot; rows=&quot;1&quot; cols=&quot;15&quot;&gt;&lt;/textarea&gt;&lt;br/&gt;
++      Password:&lt;input type=&quot;password&quot; name=&quot;passwd&quot; rows=&quot;1&quot; cols=&quot;15&quot; /&gt;&lt;br/&gt;
++      &lt;input type=&quot;submit&quot; value=&quot;Login&quot; /&gt;&lt;br/&gt;
++    &lt;/form&gt;
++    
++    &lt;div&gt;
++      &lt;font size=&quot;2&quot;&gt;Powered by &lt;a href=&quot;<A HREF="http://www.turbogears.org.nyud.net:8090/">http://www.turbogears.org.nyud.net:8090/</A>&quot;&gt;Turbogears&lt;/a&gt; and SQLite&lt;/font&gt;
++    &lt;/div&gt;
++  &lt;/body&gt;
++&lt;/html&gt;
+
+Added: trunk/threec/threec/templates/managecontests.kid
+===================================================================
+--- trunk/threec/threec/templates/managecontests.kid	2005-11-10 05:31:36 UTC (rev 17)
++++ trunk/threec/threec/templates/managecontests.kid	2005-11-10 05:33:37 UTC (rev 18)
+@@ -0,0 +1,30 @@
++&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;<A HREF="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd</A>&quot;&gt;
++&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot;
++      py:extends=&quot;'master.kid'&quot;&gt;
++
++  &lt;head&gt;
++    &lt;meta content=&quot;text/html; charset=UTF-8&quot; http-equiv=&quot;content-type&quot; /&gt;
++    &lt;title&gt;Manage your contests&lt;/title&gt;
++  &lt;/head&gt;
++  
++  &lt;body&gt;
++    &lt;table&gt;
++      &lt;tr align=&quot;center&quot;&gt;
++	&lt;td&gt;Contest Name&lt;/td&gt;&lt;td&gt;Contest Start&lt;/td&gt;&lt;td&gt;Contest End&lt;/td&gt;
++      &lt;/tr&gt;
++      &lt;tr&gt;
++	&lt;td width=&quot;100%&quot; align=&quot;center&quot;&gt;Prior Contests&lt;/td&gt;
++      &lt;/tr&gt;
++      &lt;tr py:for=&quot;contest in prior&quot; align=&quot;center&quot;&gt;
++	&lt;td&gt;&lt;a href=&quot;/submissions?contestId=${contest.id}&quot;&gt;${contest.name}&lt;/a&gt;&lt;/td&gt;
++	&lt;td&gt;{$contest.start}&lt;/td&gt;&lt;td&gt;{$contest.end}&lt;/td&gt;
++      &lt;/tr&gt;
++      &lt;tr&gt;&lt;td width=&quot;100%&quot; align=&quot;center&quot;&gt;Upcoming Contest&lt;/td&gt;&lt;/tr&gt;
++      &lt;tr py:for=&quot;contest in upcoming&quot; align=&quot;center&quot;&gt;
++	&lt;td&gt;&lt;a href=&quot;/editcontest?contestId=${contest.id}&amp;user=${user}&quot;&gt;${contest.name}&lt;/a&gt;&lt;/td&gt;
++	&lt;td&gt;{$contest.start}&lt;/td&gt;&lt;td&gt;{$contest.end}&lt;/td&gt;
++      &lt;/tr&gt;
++    &lt;/table&gt;
++    &lt;a href=&quot;/editcontest?contestId=0&amp;user=${user}&quot;&gt;Add a new contest&lt;/a&gt;
++  &lt;/body&gt;
++&lt;/html&gt;
+
+Added: trunk/threec/threec/templates/userlist.kid
+===================================================================
+--- trunk/threec/threec/templates/userlist.kid	2005-11-10 05:31:36 UTC (rev 17)
++++ trunk/threec/threec/templates/userlist.kid	2005-11-10 05:33:37 UTC (rev 18)
+@@ -0,0 +1,23 @@
++&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;<A HREF="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd</A>&quot;&gt;
++&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot;
++    py:extends=&quot;'master.kid'&quot;&gt;
++
++  &lt;head&gt;
++    &lt;meta content=&quot;text/html; charset=UTF-8&quot; http-equiv=&quot;content-type&quot; /&gt;
++    &lt;title&gt;Member List&lt;/title&gt;
++  &lt;/head&gt;
++
++  &lt;body&gt;
++    &lt;p&gt;User information for &lt;span py:replace=&quot;user&quot;&gt; username &lt;/span&gt;&lt;/p&gt;
++
++    &lt;table&gt;
++      &lt;tr align=&quot;center&quot;&gt;
++	&lt;td&gt;Problem&lt;/td&gt;&lt;td&gt;Code&lt;/td&gt;
++      &lt;/tr&gt;
++      &lt;tr py:for=&quot;subm in submissions&quot; align=&quot;center&quot;&gt;
++	&lt;td&gt;&lt;a href=&quot;${subm[1]}&quot;&gt;${subm[0]}&lt;/a&gt;&lt;/td&gt;
++	&lt;td&gt;&lt;a href=&quot;${subm[2]}&quot;&gt;View Code&lt;/a&gt;&lt;/td&gt;
++      &lt;/tr&gt;
++    &lt;/table&gt;
++  &lt;/body&gt;
++&lt;/html&gt;
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000011.html">[Threec-svn] r17 - in trunk/threec/threec: . templates
+</A></li>
+	<LI>Next message: <A HREF="000012.html">[Threec-svn] r19 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#10">[ date ]</a>
+              <a href="thread.html#10">[ thread ]</a>
+              <a href="subject.html#10">[ subject ]</a>
+              <a href="author.html#10">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>

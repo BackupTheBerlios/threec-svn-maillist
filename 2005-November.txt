@@ -1,0 +1,2482 @@
+From rrenaud at berlios.de  Sun Nov  6 03:48:07 2005
+From: rrenaud at berlios.de (Robert Renaud at BerliOS)
+Date: Sun, 6 Nov 2005 03:48:07 +0100
+Subject: [Threec-svn] r12 - in trunk: . judge threec
+Message-ID: <200511060248.jA62m7qo025770@sheep.berlios.de>
+
+Author: rrenaud
+Date: 2005-11-06 03:48:04 +0100 (Sun, 06 Nov 2005)
+New Revision: 12
+
+Added:
+   trunk/experiment/
+   trunk/judge/
+   trunk/judge/IDEAS
+   trunk/judge/naked_judge_unittest.py
+Modified:
+   trunk/threec/dev.cfg
+Log:
+comitting while i still can.. the code really doesn't work though
+
+Added: trunk/judge/IDEAS
+===================================================================
+--- trunk/judge/IDEAS	2005-10-28 03:20:52 UTC (rev 11)
++++ trunk/judge/IDEAS	2005-11-06 02:48:04 UTC (rev 12)
+@@ -0,0 +1,8 @@
++From dgott: Abstract away jail, have a NakedJudge as well as a XenJudge, 
++make the interface sufficiently general that a UMLJudge can be plugged 
++in without much reworking of the interface.
++
++Maybe: Use python module difflib for whitespace insensitive (presentation 
++error) diffing.  It seems cleaner to call a module than shell out to 
++diff -b.
++
+
+Added: trunk/judge/naked_judge_unittest.py
+===================================================================
+--- trunk/judge/naked_judge_unittest.py	2005-10-28 03:20:52 UTC (rev 11)
++++ trunk/judge/naked_judge_unittest.py	2005-11-06 02:48:04 UTC (rev 12)
+@@ -0,0 +1,15 @@
++#!/usr/bin/python
++
++import unittest
++import naked_judge
++
++class NakedJudgeTestCase(unittest.TestCase):
++    def setUp(self):
++        self.judger = naked_judge.NakedJudge()
++        
++    def testAccepted(self):
++        ret = self.judger.judge_exact('echo 1', '\n')
++        
++
++if __name__ == "__main__":
++    unittest.main()
+
+Modified: trunk/threec/dev.cfg
+===================================================================
+--- trunk/threec/dev.cfg	2005-10-28 03:20:52 UTC (rev 11)
++++ trunk/threec/dev.cfg	2005-11-06 02:48:04 UTC (rev 12)
+@@ -7,7 +7,8 @@
+ # pick the form for your database
+ # sqlobject.dburi="postgres://username at hostname/databasename"
+ # sqlobject.dburi="mysql://username:password at hostname:port/databasename"
+-sqlobject.dburi="sqlite:///Users/dgott/programming/python/threec/trunk/threec/alldata.db"
++# sqlobject.dburi="sqlite:///Users/dgott/programming/python/threec/trunk/threec/alldata.db"
++sqlobject.dburi="sqlite:///home/rob/code/trunk/threec/alldata.db"
+ 
+ [session]
+ storeageType="ram"
+
+
+
+From rrenaud at berlios.de  Sun Nov  6 03:48:49 2005
+From: rrenaud at berlios.de (Robert Renaud at BerliOS)
+Date: Sun, 6 Nov 2005 03:48:49 +0100
+Subject: [Threec-svn] r13 - trunk/judge
+Message-ID: <200511060248.jA62mndL025837@sheep.berlios.de>
+
+Author: rrenaud
+Date: 2005-11-06 03:48:48 +0100 (Sun, 06 Nov 2005)
+New Revision: 13
+
+Added:
+   trunk/judge/naked_judge.py
+Log:
+comitting while i still can.. the code really doesn't work though
+
+Added: trunk/judge/naked_judge.py
+===================================================================
+--- trunk/judge/naked_judge.py	2005-11-06 02:48:04 UTC (rev 12)
++++ trunk/judge/naked_judge.py	2005-11-06 02:48:48 UTC (rev 13)
+@@ -0,0 +1,63 @@
++#!/usr/bin/python
++
++import os
++import random
++import resource
++import sys
++
++class NakedJudge:
++    """ The NakedJudge runs code using standard unix jailing techiques.
++    It should be sufficient for a local contest where the contestants are
++    trusted, but it probably isn't sufficient for running a public contest
++    over the internet. """
++
++    def __init__(self, allow_insecurity = False):
++        self._allow_insecurity = allow_insecurity
++
++    
++    def get_run_dir(self):
++        """ @return the directory that this judeger should use for its
++        chroot"""
++        # This should be a function of judge id, just use a random name for now
++        return os.tmpnam()
++
++    def get_output_filename(self):
++        return 'actual_out'
++
++    def chroot_or_chdir(self, dir):
++        """ Change root or change directory to dir.  Chroot is attempted
++        first, since it is much more secure, but chroot requires
++        privileges that usually only root has. """
++        try:
++            os.chroot(dir)
++        except OSError, noperms:
++            if self._allow_insecurity:
++                os.chdir(dir)
++        raise SecurityError
++
++    def judge_exact(self, cmd, expected):
++        """ @return JudgeResult containing the result of running cmd against
++        expected output.  Run is successful only if there actual output is
++        an exact match."""
++        run_dir = self.get_run_dir()
++        os.mkdir(run_dir)
++        output_file_name = self.get_output_filename()
++
++        self.child_pid = os.fork()
++
++        if self.child_pid:  # parent
++            ret = os.waitpid(self.child_pid, 1)
++            print ret
++            
++        else:  # child
++            # set resource limits with resource
++            self.chroot_or_chdir(run_dir)
++
++            os.system(cmd + '>' + output_file_name)
++            sys.exit(0)
++            
++            
++
++
++    
++    
+
+
+
+From dgott at berlios.de  Sun Nov  6 06:24:09 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Sun, 6 Nov 2005 06:24:09 +0100
+Subject: [Threec-svn] r14 - in trunk/threec: . threec threec/templates
+Message-ID: <200511060524.jA65O9ND019712@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-11-06 06:24:07 +0100 (Sun, 06 Nov 2005)
+New Revision: 14
+
+Added:
+   trunk/threec/threec/templates/contests.kid
+Removed:
+   trunk/threec/dev.cfg
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/model.py
+   trunk/threec/threec/templates/createuser.kid
+   trunk/threec/threec/templates/homepage.kid
+   trunk/threec/threec/templates/master.kid
+Log:
+hopefully better
+
+Deleted: trunk/threec/dev.cfg
+===================================================================
+--- trunk/threec/dev.cfg	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/dev.cfg	2005-11-06 05:24:07 UTC (rev 14)
+@@ -1,17 +0,0 @@
+-# This is where all of your settings go for your development environment
+-
+-[global]
+-server.environment="development"
+-autoreload.package="threec"
+-
+-# pick the form for your database
+-# sqlobject.dburi="postgres://username at hostname/databasename"
+-# sqlobject.dburi="mysql://username:password at hostname:port/databasename"
+-# sqlobject.dburi="sqlite:///Users/dgott/programming/python/threec/trunk/threec/alldata.db"
+-sqlobject.dburi="sqlite:///home/rob/code/trunk/threec/alldata.db"
+-
+-[session]
+-storeageType="ram"
+-cookieName="C^3-Session-ID"
+-timeout=60
+-cleanUpDelay=60
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/controllers.py	2005-11-06 05:24:07 UTC (rev 14)
+@@ -1,5 +1,5 @@
+ import turbogears
+-from model import Page,hub,User
++from model import Page,hub,User,Contest,Submission,Problem
+ from sqlobject import SQLObjectNotFound
+ import cherrypy
+ import sha
+@@ -8,55 +8,65 @@
+ 
+     @turbogears.expose(html="threec.templates.homepage")
+     def index(self,unknown=False):
++	message = []
++	ret = {'message':message}
+ 	ret = {}
+ 	if unknown:
+-	    message = ['Unknown username/password']
+-	    ret['message']=message
++	    message.append('Unknown username/password')
+ 	    
+ 	return ret
+ 
+-    @turbogears.expose(html='threec.templates.edit')
+-    def edit(self,pagename,new=False):
+-	if not new:
+-	    page = Page.byPagename(pagename)
+-	    pagename = page.pagename
+-	    data = page.data
+-	else:
+-	    pagename = pagename
+-	    data = 'Edit me please'
+-	return dict(pagename=pagename,data=data)
++    @turbogears.expose(html='threec.templates.homepage')
++    def searchUsers(self,user):
++	message = []
++	try:
++	    message.append(User.byUser(user))
++	except SQLObjectNotFound:
++	    message.append('%s not found'%user)
++	ret = {'message':message}
++	return ret
+ 
+-    @turbogears.expose(html='threec.templates.userList')
+-    def searchuser(self,user,type):
+-	if type is 'coder':
+-	    type = 'Coder'
+-	else:
+-	    type = 'Problem Setter'
+-	return {'user':user,'type':type}
++    @turbogears.expose(html='threec.templates.homepage')
++    def default(self,*args,**kw):
++	message = [str(kw)]
++	message.append(str(args))
++	ret = {'message':message}
++	return ret
+ 
+-    def save(self,pagename,data,submit):
+-	hub.begin()
+-	page = Page.byPagename(pagename)
+-	page.data = data
+-	hub.commit()
+-	hub.end()
+-	turbogears.flash("Changes saved!")
+-	raise cherrypy.HTTPRedirect('/%s'%pagename)
+-
+     @turbogears.expose(html='threec.templates.createuser')
+     def createuser(self,**kw):
+-	return kw
++	#message = []
++	#kw['message']=message
++	return dict()
++    
++    @turbogears.expose(html='threec.templates.contests')
++    def contests(self,**kw):
++	contests = Contest.select()
++	_contests = []
++	for contest in contests:
++	    _contests.append([contest.name,contest.start,contest.end,contest.user.user,'/problems?contest=%d'%contest.id])
++	    
++	ret = {'contests':_contests}
++	return ret
+ 
++    @turbogears.expose(html='threec.templates.problems')
++    def problems(self,contest):
++	problems = []
++	ret = {'problems':problems}
++#	try:
++	set = Problem.select('contestID=%d'%contest)
++#	except:
++	for item in set:
++	    problems.append([])
++
+     @turbogears.expose(html='threec.templates.createuser')
+     def createaccount(self,**kw):
+-	#ret = {'message':''}
+ 	message = []
+ 	ret = {'message':message}
+ 	good = True
+ 
+ 	for x in kw.items():
+ 	    if len(x[1]) < 3:
+-		#ret[x[0]]=' %s must be at least 3 characters'%x[1]
+ 		message.append('%s must be at least 3 characters'%x[0])
+ 		good = False
+ 
+@@ -85,10 +95,6 @@
+ 	return ret
+ 	
+     @turbogears.expose(html='threec.templates.homepage')
+-    def confirm(self,passwdchk,email):
+-	return dict()
+-
+-    @turbogears.expose(html='threec.templates.homepage')
+     def login(self,user,passwd):
+ 	message = []
+ 	ret = {'message':message}
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/model.py	2005-11-06 05:24:07 UTC (rev 14)
+@@ -2,8 +2,6 @@
+ from turbogears.database import AutoConnectHub
+ 
+ hub = AutoConnectHub()
+-'''I don't think these all need to have _connection = hub, I dont think we will be using a lot of
+-transactions'''
+ 
+ class User(SQLObject):
+     '''Self explanatory'''
+@@ -22,28 +20,30 @@
+     name = StringCol(length=20)
+     problemset = MultipleJoin('Problem')
+     submission = MultipleJoin('Submission')
+-    creator = StringCol()
++    user = ForeignKey('User') #the creator
+ 
+ class Problem(SQLObject):
+     '''Each problem gets an entry in here'''
+     _connection = hub
+-    author = StringCol()
+-    problemName = StringCol()
+-    problemUrl = StringCol()
+-    timelimit = IntCol()
+-    memlimit = IntCol()
+-    correctness = IntCol()
++    author = StringCol(notNone=True)
++    problemName = StringCol(notNone=True)
++    problemUrl = StringCol(default='/searchProblems')
++    timelimit = IntCol(default=10)
++    memlimit = IntCol(default=512)
++    correctness = IntCol(default=100)
++    contest = ForeignKey('Contest')
+     altjudgerprogram = StringCol(default=None)
+ 
+ class Submission(SQLObject):
+     '''I think it would be better to just log all submissions which contests can store the ID to'''
++    _connection = hub
+     user = ForeignKey('User')
+     problem = ForeignKey('Problem')
+-    code = StringCol()
++    code = StringCol(notNone=True)
+     response = StringCol(length=10)
+-    speed = IntCol()
+-    memory = IntCol()
+-    time = DateTimeCol()
++    speed = IntCol(notNone=True)
++    memory = IntCol(notNone=True)
++    time = DateTimeCol(default=DateTimeCol.now())
+     contest = ForeignKey('Contest')
+ 
+ class Page(SQLObject):
+
+Added: trunk/threec/threec/templates/contests.kid
+===================================================================
+--- trunk/threec/threec/templates/contests.kid	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/templates/contests.kid	2005-11-06 05:24:07 UTC (rev 14)
+@@ -0,0 +1,24 @@
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
++      py:extends="'master.kid'">
++
++  <head>
++    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
++    <title>All Contests</title>
++  </head>
++  
++  <body>
++    <table>
++      <tr>
++	<td>Name</td><td>Start</td><td>End</td><td>Created By</td><td>Problem Set</td>
++      </tr>
++      <tr py:for="contest in contests">
++	<td py:content="contest[0]">Name</td>
++	<td py:content="contest[1]">Start</td>
++	<td py:content="contest[2]">End</td>
++	<td py:content="contest[3]">Created By</td>
++	<td><a href="${contest[4]}">View Problems</a></td>
++      </tr>
++    </table>
++  </body>
++</html>
+
+Modified: trunk/threec/threec/templates/createuser.kid
+===================================================================
+--- trunk/threec/threec/templates/createuser.kid	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/templates/createuser.kid	2005-11-06 05:24:07 UTC (rev 14)
+@@ -1,20 +1,10 @@
+-<html xmlns:py="http://purl.org/kid/ns#">
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+ 
+-<?python
+-try:
+-   if message:
+-      pass
+-except NameError:
+-   message = []
+-print 'ok all'
+-?>
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#" py:extends="'master.kid'">
+   <head>
+     <title>Creating Your Account</title>
+   </head>
+   <body>
+-    <span py:for="msg in message">
+-      <p py:content="msg">Message to be displayed</p>
+-    </span>
+     <form action="createaccount" method="post">
+       Desired Username:<textarea name="username" rows="1" cols="15"></textarea><br/>
+       Desired Password:<input name="passwd" type="password" rows="1" cols="15"/><br/>
+
+Modified: trunk/threec/threec/templates/homepage.kid
+===================================================================
+--- trunk/threec/threec/templates/homepage.kid	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/templates/homepage.kid	2005-11-06 05:24:07 UTC (rev 14)
+@@ -1,6 +1,5 @@
+ <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
+-      py:extends="'master.kid'">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#" py:extends="'master.kid'">
+ 
+   <head>
+     <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+@@ -21,19 +20,16 @@
+       <input type="submit" value="Login" /><br/>
+     </form>
+     
+-    <a href="/RecentMatches">Recent Contests</a><br/>
+-
+     <br/>
++    <a href="/contests">All Competitions</a><br/>
+     <a href="/calender">Upcoming Competitions</a><br/>
+     <a href="/host">Manage your Competitions</a><br/>
+ 
+     <br />
+     Search for a User:<br/>
+-    <form action="searchuser" method="post">
++    <form action="searchUsers" method="post">
+       <textarea name="user" rows="1" cols="15"></textarea><br/>      
+-      <input type="radio" name="type" value="coder" checked="true">As a Coder</input>
+       <input type="submit" value="Search" /><br/>
+-      <input type="radio" name="type" value="setter">As a Problem Setter</input>
+     </form><br/>
+     
+     <div>
+
+Modified: trunk/threec/threec/templates/master.kid
+===================================================================
+--- trunk/threec/threec/templates/master.kid	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/templates/master.kid	2005-11-06 05:24:07 UTC (rev 14)
+@@ -14,6 +14,7 @@
+    if message:
+       pass
+ except NameError:
++   print 'created an empty message'
+    message = []
+ 
+ print 'this works'
+
+
+
+From dgott at berlios.de  Sun Nov  6 07:41:26 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Sun, 6 Nov 2005 07:41:26 +0100
+Subject: [Threec-svn] r15 - in trunk/threec/threec: . templates
+Message-ID: <200511060641.jA66fQFw026743@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-11-06 07:41:24 +0100 (Sun, 06 Nov 2005)
+New Revision: 15
+
+Added:
+   trunk/threec/threec/templates/problems.kid
+   trunk/threec/threec/templates/problemstatement.kid
+Modified:
+   trunk/threec/threec/controllers.py
+Log:
+cooler stuff one more before sleep
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-06 05:24:07 UTC (rev 14)
++++ trunk/threec/threec/controllers.py	2005-11-06 06:41:24 UTC (rev 15)
+@@ -28,11 +28,23 @@
+ 
+     @turbogears.expose(html='threec.templates.homepage')
+     def default(self,*args,**kw):
+-	message = [str(kw)]
+-	message.append(str(args))
+-	ret = {'message':message}
+-	return ret
++	#message = [str(kw)]
++	#message.append(str(args))
++	#ret = {'message':message}
++	#return ret
++	ret = {}
+ 
++	print args[0]
++
++	try:
++	    if args[0] == 'problems':
++		print 'good'
++		ret['tg_template']='threec.templates.problemstatement'
++		ret['problem']=Page.byPagename('%s_%s'%(args[1],args[2])).data
++		return ret
++	except IndexError:
++	    return 'Something unintended happened'
++
+     @turbogears.expose(html='threec.templates.createuser')
+     def createuser(self,**kw):
+ 	#message = []
+@@ -53,12 +65,14 @@
+     def problems(self,contest):
+ 	problems = []
+ 	ret = {'problems':problems}
+-#	try:
+-	set = Problem.select('contestID=%d'%contest)
+-#	except:
++	contest = Contest.get(int(contest))
++	set = contest.problemset
+ 	for item in set:
+-	    problems.append([])
++	    problems.append([item.problemName,item.problemUrl,item.author])
+ 
++	ret['message']=['Problem set for %s'%contest.name]
++	return ret
++
+     @turbogears.expose(html='threec.templates.createuser')
+     def createaccount(self,**kw):
+ 	message = []
+
+Added: trunk/threec/threec/templates/problems.kid
+===================================================================
+--- trunk/threec/threec/templates/problems.kid	2005-11-06 05:24:07 UTC (rev 14)
++++ trunk/threec/threec/templates/problems.kid	2005-11-06 06:41:24 UTC (rev 15)
+@@ -0,0 +1,17 @@
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
++      py:extends="'master.kid'">
++
++  <head>
++    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
++    <title>Problem List</title>
++  </head>
++  
++  <body>
++    <ul>
++      <li py:for="problem in problems">
++	<a href="${problem[1]}">${problem[0]}</a> by <a href="/authors?s=${problem[2]}">${problem[2]}</a>
++      </li>
++    </ul>
++  </body>
++</html>
+
+Added: trunk/threec/threec/templates/problemstatement.kid
+===================================================================
+--- trunk/threec/threec/templates/problemstatement.kid	2005-11-06 05:24:07 UTC (rev 14)
++++ trunk/threec/threec/templates/problemstatement.kid	2005-11-06 06:41:24 UTC (rev 15)
+@@ -0,0 +1,7 @@
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
++      py:extends="'master.kid'">
++
++${XML(problem)}
++
++</html>
+
+
+
+From dgott at berlios.de  Sun Nov  6 07:57:44 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Sun, 6 Nov 2005 07:57:44 +0100
+Subject: [Threec-svn] r16 - in trunk/threec/threec: . templates
+Message-ID: <200511060657.jA66viFT031731@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-11-06 07:57:28 +0100 (Sun, 06 Nov 2005)
+New Revision: 16
+
+Added:
+   trunk/threec/threec/templates/author.kid
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/templates/problems.kid
+Log:
+last commit for the night
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-06 06:41:24 UTC (rev 15)
++++ trunk/threec/threec/controllers.py	2005-11-06 06:57:28 UTC (rev 16)
+@@ -51,6 +51,17 @@
+ 	#kw['message']=message
+ 	return dict()
+     
++    @turbogears.expose(html='threec.templates.author')
++    def author(self,s):
++	probs = Problem.select('author="%s"'%s)
++	problems = []
++	ret = {'problems':problems}
++	for item in probs:
++	    problems.append([item.problemName,item.problemUrl])
++	    
++	ret['author']=s
++	return ret
++
+     @turbogears.expose(html='threec.templates.contests')
+     def contests(self,**kw):
+ 	contests = Contest.select()
+
+Added: trunk/threec/threec/templates/author.kid
+===================================================================
+--- trunk/threec/threec/templates/author.kid	2005-11-06 06:41:24 UTC (rev 15)
++++ trunk/threec/threec/templates/author.kid	2005-11-06 06:57:28 UTC (rev 16)
+@@ -0,0 +1,21 @@
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
++      py:extends="'master.kid'">
++
++  <head>
++    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
++    <title>Problems made by ${author}</title>
++  </head>
++  
++  <span>
++    All problems by ${author}:
++  </span>
++
++  <body>
++    <ul>
++      <li py:for="problem in problems">
++	<a href="${problem[1]}">${problem[0]}</a>
++      </li>
++    </ul>
++  </body>
++</html>
+
+Modified: trunk/threec/threec/templates/problems.kid
+===================================================================
+--- trunk/threec/threec/templates/problems.kid	2005-11-06 06:41:24 UTC (rev 15)
++++ trunk/threec/threec/templates/problems.kid	2005-11-06 06:57:28 UTC (rev 16)
+@@ -10,7 +10,7 @@
+   <body>
+     <ul>
+       <li py:for="problem in problems">
+-	<a href="${problem[1]}">${problem[0]}</a> by <a href="/authors?s=${problem[2]}">${problem[2]}</a>
++	<a href="${problem[1]}">${problem[0]}</a> by <a href="/author?s=${problem[2]}">${problem[2]}</a>
+       </li>
+     </ul>
+   </body>
+
+
+
+From dgott at berlios.de  Thu Nov 10 06:33:39 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Thu, 10 Nov 2005 06:33:39 +0100
+Subject: [Threec-svn] r18 - trunk/threec/threec/templates
+Message-ID: <200511100533.jAA5Xdhx005594@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-11-10 06:33:37 +0100 (Thu, 10 Nov 2005)
+New Revision: 18
+
+Added:
+   trunk/threec/threec/templates/editcontest.kid
+   trunk/threec/threec/templates/hosting.kid
+   trunk/threec/threec/templates/managecontests.kid
+   trunk/threec/threec/templates/userlist.kid
+Log:
+oops added files
+
+Added: trunk/threec/threec/templates/editcontest.kid
+===================================================================
+--- trunk/threec/threec/templates/editcontest.kid	2005-11-10 05:31:36 UTC (rev 17)
++++ trunk/threec/threec/templates/editcontest.kid	2005-11-10 05:33:37 UTC (rev 18)
+@@ -0,0 +1,37 @@
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
++    py:extends="'master.kid'">
++
++<head>
++    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
++    <title>Edit A Contest</title>
++</head>
++
++<body>
++
++  <form action="savecontest" method="post"> 
++    Name:<textarea name="name">${name}</textarea><br />
++    Start:<br />End:<br />
++    <input type="submit" name="submit" value="Save"/> 
++  </form> 
++  
++  <table>
++    <tr>
++      <td>Problem</td><td>Remove</td>
++    </tr>
++    <tr py:for="prob in problemset">
++      <td><a href="${prob.problemUrl}">${prob.problemName}</a></td>
++      <td><a href="/remove?problem=${prob.id}">Remove</a></td>
++    </tr>
++    
++    <form action="addproblem" method="post">
++      Name:<textarea name="name"></textarea><br />
++      Time Limit:<textarea name="time">10</textarea><br />
++      Memory Limit:<textarea name="memory">100</textarea><br />
++      Correctness:<textarea name="correct">100</textarea><br />
++      <input type="submit" name="submit" value="Add Contest"/>
++    </form>
++  </table>
++  
++</body>
++</html>
+
+Added: trunk/threec/threec/templates/hosting.kid
+===================================================================
+--- trunk/threec/threec/templates/hosting.kid	2005-11-10 05:31:36 UTC (rev 17)
++++ trunk/threec/threec/templates/hosting.kid	2005-11-10 05:33:37 UTC (rev 18)
+@@ -0,0 +1,23 @@
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#" py:extends="'master.kid'">
++
++  <head>
++    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
++    <title>Welcome to the Collaborative Coding Contest Hosting Page</title>
++  </head>
++
++  <body>
++    
++    Login<br/>
++    Information must be entered because I don't have sessions enabled yet<br/>
++    <form action="hostcontest" method="post">
++      Name:<textarea name="user" rows="1" cols="15"></textarea><br/>
++      Password:<input type="password" name="passwd" rows="1" cols="15" /><br/>
++      <input type="submit" value="Login" /><br/>
++    </form>
++    
++    <div>
++      <font size="2">Powered by <a href="http://www.turbogears.org.nyud.net:8090/">Turbogears</a> and SQLite</font>
++    </div>
++  </body>
++</html>
+
+Added: trunk/threec/threec/templates/managecontests.kid
+===================================================================
+--- trunk/threec/threec/templates/managecontests.kid	2005-11-10 05:31:36 UTC (rev 17)
++++ trunk/threec/threec/templates/managecontests.kid	2005-11-10 05:33:37 UTC (rev 18)
+@@ -0,0 +1,30 @@
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
++      py:extends="'master.kid'">
++
++  <head>
++    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
++    <title>Manage your contests</title>
++  </head>
++  
++  <body>
++    <table>
++      <tr align="center">
++	<td>Contest Name</td><td>Contest Start</td><td>Contest End</td>
++      </tr>
++      <tr>
++	<td width="100%" align="center">Prior Contests</td>
++      </tr>
++      <tr py:for="contest in prior" align="center">
++	<td><a href="/submissions?contestId=${contest.id}">${contest.name}</a></td>
++	<td>{$contest.start}</td><td>{$contest.end}</td>
++      </tr>
++      <tr><td width="100%" align="center">Upcoming Contest</td></tr>
++      <tr py:for="contest in upcoming" align="center">
++	<td><a href="/editcontest?contestId=${contest.id}&user=${user}">${contest.name}</a></td>
++	<td>{$contest.start}</td><td>{$contest.end}</td>
++      </tr>
++    </table>
++    <a href="/editcontest?contestId=0&user=${user}">Add a new contest</a>
++  </body>
++</html>
+
+Added: trunk/threec/threec/templates/userlist.kid
+===================================================================
+--- trunk/threec/threec/templates/userlist.kid	2005-11-10 05:31:36 UTC (rev 17)
++++ trunk/threec/threec/templates/userlist.kid	2005-11-10 05:33:37 UTC (rev 18)
+@@ -0,0 +1,23 @@
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
++    py:extends="'master.kid'">
++
++  <head>
++    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
++    <title>Member List</title>
++  </head>
++
++  <body>
++    <p>User information for <span py:replace="user"> username </span></p>
++
++    <table>
++      <tr align="center">
++	<td>Problem</td><td>Code</td>
++      </tr>
++      <tr py:for="subm in submissions" align="center">
++	<td><a href="${subm[1]}">${subm[0]}</a></td>
++	<td><a href="${subm[2]}">View Code</a></td>
++      </tr>
++    </table>
++  </body>
++</html>
+
+
+
+From dgott at berlios.de  Thu Nov 10 06:31:41 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Thu, 10 Nov 2005 06:31:41 +0100
+Subject: [Threec-svn] r17 - in trunk/threec/threec: . templates
+Message-ID: <200511100531.jAA5Vflp004175@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-11-10 06:31:36 +0100 (Thu, 10 Nov 2005)
+New Revision: 17
+
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/model.py
+   trunk/threec/threec/templates/contests.kid
+   trunk/threec/threec/templates/homepage.kid
+   trunk/threec/threec/templates/userList.kid
+Log:
+things dont work but i feel like committing cause some things do work...but the database changed so dont expect anything you had to work from before until i repopulate which is what this submission will help do
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/controllers.py	2005-11-10 05:31:36 UTC (rev 17)
+@@ -2,8 +2,17 @@
+ from model import Page,hub,User,Contest,Submission,Problem
+ from sqlobject import SQLObjectNotFound
+ import cherrypy
+-import sha
++import sha,datetime
+ 
++def separateContests(contest):
++    return [contest.name,contest.start,contest.end,contest.user.user,'/problems?contestId=%d'%contest.id]
++
++def separateSubmission(subm):
++    return [subm.problem.problemName,subm.problem.problemUrl,'/viewcode?submissionId=%d'%subm.id]
++
++def separateProblems(prob):
++    return [prob.problemName,prob.problemUrl,prob.author,prob.contest.name,'/problems?contestId=%d'%prob.contest.id,'/submissions?problemId=%d'%prob.id]
++
+ class Root:
+ 
+     @turbogears.expose(html="threec.templates.homepage")
+@@ -16,16 +25,77 @@
+ 	    
+ 	return ret
+ 
+-    @turbogears.expose(html='threec.templates.homepage')
+-    def searchUsers(self,user):
++    @turbogears.expose(html='threec.templates.editcontest')
++    def editcontest(self,contestId,user):
++	name = ''
++	start = ''
++	end = ''
++	problems = []
++	ret = {'name':name,'start':start,'end':end,'problemset':problems,'user':user}
++
++	if contestId:
++	    contest = Contest.get(contestId)
++	    name = contest.name
++	    start = contest.start
++	    end = contest.end
++	    problems = contest.problemset
++
++	return ret
++
++    @turbogears.expose(html='threec.templates.hosting')
++    def hostcontest(self,user=None,passwd=None):
++	if not user:
++	    return {'message':['Must enter a valid username and password to manage contests'],'tg_template':'threec.templates.homepage'}
++
++	loginSuccessful = login(self,user,passwd)
++	if loginSuccessful['message'][0].count('invalid'):
++	    return {'message':['Must enter a valid username and password to manage contests'],'tg_template':'threec.templates.homepage'}
++
++	user = User.byUser(user)
++	priorContests = []
++	upcomingContests = []
++	now = datetime.datetime.now()
++	for contest in user.contests_hosting:
++	    if contest.start > now:
++		upcomingContests.append(contest)
++	    else:
++		priorContests.append(contest)
++
++	ret = {'prior':priorContests,'upcoming':upcomingContests,'tg_template':'threec.templates.managecontests','user':user}
++	return ret
++
++    @turbogears.expose(html='threec.templates.userlist')
++    def searchusers(self,userName):
+ 	message = []
++	ret = {'message':message}
+ 	try:
+-	    message.append(User.byUser(user))
++	    user = User.byUser(userName)
+ 	except SQLObjectNotFound:
+-	    message.append('%s not found'%user)
+-	ret = {'message':message}
++	    message.append('%s is an unknown username'%userName)
++	    ret['tg_template'] = 'threec.templates.homepage'
++	    return ret
++
++	ret['user'] = userName
++	submissions = [separateSubmission(q) for q in user.submissions]
++	ret['submissions']=submissions
+ 	return ret
+ 
++    @turbogears.expose(html='threec.templates.viewcode')
++    def viewcode(self,submissionId):
++	message = []
++	ret = {'message':message}
++
++	try:
++	    subm = Submission.get(submissionId)
++	except SQLObjectNotFound:
++	    message.append('%d is an unknown submission ID'%submissionId)
++	    ret['tg_template']='threec.templates.homepage'
++	    return ret
++	
++	#ret['code'] = subm.code
++	#return ret
++	return subm.code #kills < > thinking they are tags
++
+     @turbogears.expose(html='threec.templates.homepage')
+     def default(self,*args,**kw):
+ 	#message = [str(kw)]
+@@ -56,27 +126,58 @@
+ 	probs = Problem.select('author="%s"'%s)
+ 	problems = []
+ 	ret = {'problems':problems}
++	now = datetime.datetime.now()
+ 	for item in probs:
+-	    problems.append([item.problemName,item.problemUrl])
++	    if item.contest.start < now:
++		problems.append([item.problemName,item.problemUrl])
+ 	    
+ 	ret['author']=s
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.contests')
++    def upcomingcontests(self,**kw):
++	contests = Contest.select()
++	_contests = []
++	now = datetime.datetime.now()
++	for contest in contests:
++	    if contest.start > now:
++		_contests.append(separateContests(contest))
++
++	if not len(_contests):
++	    ret = {'message':['No contests are scheduled']};
++	else:
++	    ret = {}
++
++	ret['contests']=_contests
++	ret['showProblemSetLink']=False
++	return ret
++
++    @turbogears.expose(html='threec.templates.contests')
+     def contests(self,**kw):
+ 	contests = Contest.select()
+ 	_contests = []
++	now = datetime.datetime.now()
+ 	for contest in contests:
+-	    _contests.append([contest.name,contest.start,contest.end,contest.user.user,'/problems?contest=%d'%contest.id])
++	    if contest.start < now:
++		_contests.append(separateContests(contest))
+ 	    
+-	ret = {'contests':_contests}
++	ret = {'contests':_contests,'showProblemSetLink':True}
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.problems')
+-    def problems(self,contest):
++    def problems(self,contestId):
+ 	problems = []
+ 	ret = {'problems':problems}
+-	contest = Contest.get(int(contest))
++	try:
++	    contest = Contest.get(int(contestId))
++	except SQLObjectNotFound:
++	    ret['message'] = ['%d is not a valid contest id'%contestId]
++	    return ret
++
++	if contest.start > datetime.datetime.now():
++	    ret['message'] = ['The contest has not started yet']
++	    return ret
++
+ 	set = contest.problemset
+ 	for item in set:
+ 	    problems.append([item.problemName,item.problemUrl,item.author])
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/model.py	2005-11-10 05:31:36 UTC (rev 17)
+@@ -33,6 +33,7 @@
+     correctness = IntCol(default=100)
+     contest = ForeignKey('Contest')
+     altjudgerprogram = StringCol(default=None)
++    submissions = MultipleJoin('Submission')
+ 
+ class Submission(SQLObject):
+     '''I think it would be better to just log all submissions which contests can store the ID to'''
+@@ -45,6 +46,7 @@
+     memory = IntCol(notNone=True)
+     time = DateTimeCol(default=DateTimeCol.now())
+     contest = ForeignKey('Contest')
++    language = StringCol(length=6)
+ 
+ class Page(SQLObject):
+     '''Intended to hold wiki data - No idea if we want/need this'''
+
+Modified: trunk/threec/threec/templates/contests.kid
+===================================================================
+--- trunk/threec/threec/templates/contests.kid	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/templates/contests.kid	2005-11-10 05:31:36 UTC (rev 17)
+@@ -9,15 +9,15 @@
+   
+   <body>
+     <table>
+-      <tr>
+-	<td>Name</td><td>Start</td><td>End</td><td>Created By</td><td>Problem Set</td>
++      <tr align="center">
++	<td>Name</td><td>Start</td><td>End</td><td>Created By</td><td py:if="showProblemSetLink">Problem Set</td>
+       </tr>
+-      <tr py:for="contest in contests">
++      <tr py:for="contest in contests" align="center">
+ 	<td py:content="contest[0]">Name</td>
+ 	<td py:content="contest[1]">Start</td>
+ 	<td py:content="contest[2]">End</td>
+-	<td py:content="contest[3]">Created By</td>
+-	<td><a href="${contest[4]}">View Problems</a></td>
++	<td py:content="contest[3]"><a href="/searchUsers?userName=${contest[3]}">Created By</a></td>
++	<td py:if="showProblemSetLink"><a href="${contest[4]}">View Problems</a></td>
+       </tr>
+     </table>
+   </body>
+
+Modified: trunk/threec/threec/templates/homepage.kid
+===================================================================
+--- trunk/threec/threec/templates/homepage.kid	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/templates/homepage.kid	2005-11-10 05:31:36 UTC (rev 17)
+@@ -22,13 +22,13 @@
+     
+     <br/>
+     <a href="/contests">All Competitions</a><br/>
+-    <a href="/calender">Upcoming Competitions</a><br/>
+-    <a href="/host">Manage your Competitions</a><br/>
++    <a href="/upcomingcontests">Upcoming Competitions</a><br/>
++    <a href="/hostcontests">Manage your Competitions</a><br/>
+ 
+     <br />
+     Search for a User:<br/>
+-    <form action="searchUsers" method="post">
+-      <textarea name="user" rows="1" cols="15"></textarea><br/>      
++    <form action="searchusers" method="post">
++      <textarea name="userName" rows="1" cols="15"></textarea><br/>      
+       <input type="submit" value="Search" /><br/>
+     </form><br/>
+     
+
+Modified: trunk/threec/threec/templates/userList.kid
+===================================================================
+--- trunk/threec/threec/templates/userList.kid	2005-11-06 06:57:28 UTC (rev 16)
++++ trunk/threec/threec/templates/userList.kid	2005-11-10 05:31:36 UTC (rev 17)
+@@ -8,12 +8,16 @@
+   </head>
+ 
+   <body>
+-    <p>You searched for <span py:replace="user"> username </span></p>
+-    <p> 
+-      Here are <span py:replace="user">username</span>'s stats as a <span py:replace="type"> coder/problemsetter </span>
+-    </p>
+-    <div>
+-      <font size="2">Powered by <a href="http://www.turbogears.org.nyud.net:8090/">Turbogears</a> and SQLite</font>
+-    </div>
++    <p>User information for <span py:replace="user"> username </span></p>
++
++    <table>
++      <tr align="center">
++	<td>Problem</td><td>Code</td>
++      </tr>
++      <tr py:for="subm in submissions" align="center">
++	<td><a href="${subm[1]}">${subm[0]}</a></td>
++	<td><a href="${subm[2]}">View Code</a></td>
++      </tr>
++    </table>
+   </body>
+ </html>
+
+
+
+From dgott at berlios.de  Fri Nov 11 05:26:12 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Fri, 11 Nov 2005 05:26:12 +0100
+Subject: [Threec-svn] r19 - in trunk/threec/threec: . templates
+Message-ID: <200511110426.jAB4QCCg032751@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-11-11 05:26:09 +0100 (Fri, 11 Nov 2005)
+New Revision: 19
+
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/templates/editcontest.kid
+   trunk/threec/threec/templates/homepage.kid
+   trunk/threec/threec/templates/hosting.kid
+Log:
+getting there
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-10 05:33:37 UTC (rev 18)
++++ trunk/threec/threec/controllers.py	2005-11-11 04:26:09 UTC (rev 19)
+@@ -13,8 +13,31 @@
+ def separateProblems(prob):
+     return [prob.problemName,prob.problemUrl,prob.author,prob.contest.name,'/problems?contestId=%d'%prob.contest.id,'/submissions?problemId=%d'%prob.id]
+ 
++def login(user,passwd):
++    try:
++	user = User.byUser(user)
++    except SQLObjectNotFound:
++	return False
++    
++    if not sha.sha(passwd).hexdigest() == user.passwd:
++	return False
++
++    return True
++
+ class Root:
+ 
++    @turbogears.expose(html='threec.templates.editcontest')
++    def savecontest(self,user,name,syear,smonth,sday,shour,smin,eyear,emonth,eday,ehour,emin):
++	start = datetime.datetime(syear,smonth,sday,shour)
++	end = datetime.datetime(eyear,emonth,eday,ehour)
++	contest = Contest(start=start,end=end,name=name,user=user)
++	ret = {}
++	ret['name']=name
++	ret['start']=start
++	ret['end']=end
++	ret['user']=user
++	return ret
++
+     @turbogears.expose(html="threec.templates.homepage")
+     def index(self,unknown=False):
+ 	message = []
+@@ -26,12 +49,13 @@
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.editcontest')
+-    def editcontest(self,contestId,user):
++    def editcontest(self,contestId,userId):
++	contestId = int(contestId)
+ 	name = ''
+ 	start = ''
+ 	end = ''
+ 	problems = []
+-	ret = {'name':name,'start':start,'end':end,'problemset':problems,'user':user}
++	ret = {'name':name,'start':start,'end':end,'problemset':problems,'user':userId}
+ 
+ 	if contestId:
+ 	    contest = Contest.get(contestId)
+@@ -43,25 +67,22 @@
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.hosting')
+-    def hostcontest(self,user=None,passwd=None):
+-	if not user:
++    def hostcontests(self,user=None,passwd=None):
++	if not login(user,passwd):
+ 	    return {'message':['Must enter a valid username and password to manage contests'],'tg_template':'threec.templates.homepage'}
+ 
+-	loginSuccessful = login(self,user,passwd)
+-	if loginSuccessful['message'][0].count('invalid'):
+-	    return {'message':['Must enter a valid username and password to manage contests'],'tg_template':'threec.templates.homepage'}
+-
+ 	user = User.byUser(user)
+ 	priorContests = []
+ 	upcomingContests = []
+ 	now = datetime.datetime.now()
++
+ 	for contest in user.contests_hosting:
+ 	    if contest.start > now:
+ 		upcomingContests.append(contest)
+ 	    else:
+ 		priorContests.append(contest)
+ 
+-	ret = {'prior':priorContests,'upcoming':upcomingContests,'tg_template':'threec.templates.managecontests','user':user}
++	ret = {'prior':priorContests,'upcoming':upcomingContests,'userId':user.id}
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.userlist')
+@@ -225,20 +246,12 @@
+ 	message = []
+ 	ret = {'message':message}
+ 
+-	try:
+-	    user = User.byUser(user)
+-	except SQLObjectNotFound:
+-	    message.append('That is an invalid Username/Password')
+-	    return ret
+-
+-	if sha.sha(passwd).hexdigest() == user.passwd:
++	if login(user,passwd):
+ 	    #create a session
+-	    pass
++	    message.append('You have successfully logged in.')
+ 	else:
+-	    message.append('That is an invalid Username/Password')
+-	    return ret
++	    message.append('That is an invalid Username/Password.')
+ 
+-	message.append('You have successfully logged in')
+ 	return ret
+ 
+     #@turbogears.expose(html="threec.templates.homepage")
+
+Modified: trunk/threec/threec/templates/editcontest.kid
+===================================================================
+--- trunk/threec/threec/templates/editcontest.kid	2005-11-10 05:33:37 UTC (rev 18)
++++ trunk/threec/threec/templates/editcontest.kid	2005-11-11 04:26:09 UTC (rev 19)
+@@ -10,28 +10,66 @@
+ <body>
+ 
+   <form action="savecontest" method="post"> 
+-    Name:<textarea name="name">${name}</textarea><br />
+-    Start:<br />End:<br />
+-    <input type="submit" name="submit" value="Save"/> 
+-  </form> 
++    Name:<textarea rows="1" name="name">${name}</textarea><br />
++    Start:
++    <select name="syear">
++      <option value="2005">2005</option>
++      <option value="2005">2006</option>
++    </select>
++    <select name="smonth" selected="11">
++      <option py:for="x in range(12)" value="${x+1}">${x+1}</option>
++    </select>
++    <select name="sday">
++      <option py:for="x in range(30)" value="${x+1}">${x+1}</option>
++    </select>
++    <select name="shour">
++      <option py:for="x in range(24)" value="${x}">${x}</option>
++    </select>
++    <select name="smin">
++      <option py:for="x in range(60)" value="${x}">${x}</option>
++    </select>
++
++    <br />End:
++    <select name="eyear">
++      <option value="2005">2005</option>
++      <option value="2005">2006</option>
++    </select>
++    <select name="emonth">
++      <option py:for="x in range(12)" value="${x+1}">${x+1}</option>
++    </select>
++    <select name="eday">
++      <option py:for="x in range(30)" value="${x+1}">${x+1}</option>
++    </select>
++    <select name="ehour">
++      <option py:for="x in range(24)" value="${x}">${x}</option>
++    </select>
++    <select name="emin">
++      <option py:for="x in range(60)" value="${x}">${x}</option>
++    </select>
++
++    <input type="hidden" name="userId" value="${user}" />
++    <br /><input type="submit" name="submit" value="Save"/> 
++  </form>
+   
+   <table>
+     <tr>
+       <td>Problem</td><td>Remove</td>
+     </tr>
++    <hr />
+     <tr py:for="prob in problemset">
+       <td><a href="${prob.problemUrl}">${prob.problemName}</a></td>
+       <td><a href="/remove?problem=${prob.id}">Remove</a></td>
+     </tr>
+-    
+-    <form action="addproblem" method="post">
+-      Name:<textarea name="name"></textarea><br />
+-      Time Limit:<textarea name="time">10</textarea><br />
+-      Memory Limit:<textarea name="memory">100</textarea><br />
+-      Correctness:<textarea name="correct">100</textarea><br />
+-      <input type="submit" name="submit" value="Add Contest"/>
+-    </form>
+   </table>
+   
++  <form action="addproblem" method="post">
++    Name:<textarea rows="1" name="name"></textarea><br />
++    Statement:<textarea rows="1" name="stmt"></textarea><br />
++    Time Limit:<textarea rows="1" name="time">10</textarea><br />
++    Memory Limit:<textarea rows="1" name="memory">100</textarea><br />
++    Correctness:<textarea rows="1" name="correct">100</textarea><br />
++    <input type="submit" name="submit" value="Add Problem to Contest"/>
++  </form>
++
+ </body>
+ </html>
+
+Modified: trunk/threec/threec/templates/homepage.kid
+===================================================================
+--- trunk/threec/threec/templates/homepage.kid	2005-11-10 05:33:37 UTC (rev 18)
++++ trunk/threec/threec/templates/homepage.kid	2005-11-11 04:26:09 UTC (rev 19)
+@@ -23,8 +23,15 @@
+     <br/>
+     <a href="/contests">All Competitions</a><br/>
+     <a href="/upcomingcontests">Upcoming Competitions</a><br/>
+-    <a href="/hostcontests">Manage your Competitions</a><br/>
+ 
++
++    Manage your Competitions:<br/>
++    <form action="hostcontests" method="post">
++      Name:<textarea name="user" rows="1" cols="15"></textarea><br/>
++      Password:<input type="password" name="passwd" rows="1" cols="15" /><br/>
++      <input type="submit" value="Login" /><br/>
++    </form>
++      
+     <br />
+     Search for a User:<br/>
+     <form action="searchusers" method="post">
+
+Modified: trunk/threec/threec/templates/hosting.kid
+===================================================================
+--- trunk/threec/threec/templates/hosting.kid	2005-11-10 05:33:37 UTC (rev 18)
++++ trunk/threec/threec/templates/hosting.kid	2005-11-11 04:26:09 UTC (rev 19)
+@@ -3,21 +3,31 @@
+ 
+   <head>
+     <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
+-    <title>Welcome to the Collaborative Coding Contest Hosting Page</title>
++    <title>Manage your contests</title>
+   </head>
++  
++  <body>
+ 
+-  <body>
+-    
+-    Login<br/>
+-    Information must be entered because I don't have sessions enabled yet<br/>
+-    <form action="hostcontest" method="post">
+-      Name:<textarea name="user" rows="1" cols="15"></textarea><br/>
+-      Password:<input type="password" name="passwd" rows="1" cols="15" /><br/>
+-      <input type="submit" value="Login" /><br/>
+-    </form>
+-    
+-    <div>
+-      <font size="2">Powered by <a href="http://www.turbogears.org.nyud.net:8090/">Turbogears</a> and SQLite</font>
+-    </div>
++
++    <table>
++      <tr align="center">
++	<td>Contest Name</td><td>Contest Start</td><td>Contest End</td>
++      </tr>
++      <tr>
++	<td align="center">Prior Contests</td>
++      </tr>
++      <tr py:for="contest in prior" align="center">
++	<td><a href="/submissions?contestId=${contest.id}">${contest.name}</a></td>
++	<td>{$contest.start}</td><td>{$contest.end}</td>
++      </tr>
++      <tr><td align="center">Upcoming Contest</td></tr>
++      <tr py:for="contest in upcoming" align="center">
++	<td><a href="/editcontest?contestId=${contest.id}&amp;userId=${userId}">${contest.name}</a></td>
++	<td>{$contest.start}</td><td>{$contest.end}</td>
++      </tr>
++    </table>
++
++    <a href="/editcontest?contestId=0&amp;userId=${userId}">Add a new contest</a>
++
+   </body>
+ </html>
+
+
+
+From rrenaud at berlios.de  Sat Nov 12 05:37:27 2005
+From: rrenaud at berlios.de (Robert Renaud at BerliOS)
+Date: Sat, 12 Nov 2005 05:37:27 +0100
+Subject: [Threec-svn] r20 - trunk/judge
+Message-ID: <200511120437.jAC4bRnU027658@sheep.berlios.de>
+
+Author: rrenaud
+Date: 2005-11-12 05:37:25 +0100 (Sat, 12 Nov 2005)
+New Revision: 20
+
+Modified:
+   trunk/judge/naked_judge.py
+   trunk/judge/naked_judge_unittest.py
+Log:
+added initial highly sucky and broken judger
+
+Modified: trunk/judge/naked_judge.py
+===================================================================
+--- trunk/judge/naked_judge.py	2005-11-11 04:26:09 UTC (rev 19)
++++ trunk/judge/naked_judge.py	2005-11-12 04:37:25 UTC (rev 20)
+@@ -1,25 +1,30 @@
+ #!/usr/bin/python
+ 
++"""The NakedJudge is a judger which doesn't use an advanced jailing
++techniques.  Instead it uses as much as protection against rogue code
++as it can muster on a default Unix system.
++
++It should be sufficient for a local contest where the contestants are
++trusted, but it probably isn't sufficient for running a public contest
++over the internet."""
++
+ import os
+ import random
+ import resource
+ import sys
+ 
+ class NakedJudge:
+-    """ The NakedJudge runs code using standard unix jailing techiques.
+-    It should be sufficient for a local contest where the contestants are
+-    trusted, but it probably isn't sufficient for running a public contest
+-    over the internet. """
++    """The NakedJudge runs code using standard Unix jailing techniques."""
+ 
+     def __init__(self, allow_insecurity = False):
++        """@param allow_insecurity Should gaping vulnerabilities be allowed?"""
+         self._allow_insecurity = allow_insecurity
+-
+     
+     def get_run_dir(self):
+-        """ @return the directory that this judeger should use for its
+-        chroot"""
++        """ @return The directory that this judger should use for its
++        chroot."""
+         # This should be a function of judge id, just use a random name for now
+-        return os.tmpnam()
++        return '/tmp/' + str(random.randint(0, 10000000))
+ 
+     def get_output_filename(self):
+         return 'actual_out'
+@@ -33,11 +38,13 @@
+         except OSError, noperms:
+             if self._allow_insecurity:
+                 os.chdir(dir)
+-        raise SecurityError
++                return
++            raise SecurityException("Judger cannot chroot and refuses to"
++                                    "chdir because insecurity is not allowed")
+ 
+     def judge_exact(self, cmd, expected):
+         """ @return JudgeResult containing the result of running cmd against
+-        expected output.  Run is successful only if there actual output is
++        expected output.  Run is successful only if the actual output is
+         an exact match."""
+         run_dir = self.get_run_dir()
+         os.mkdir(run_dir)
+@@ -47,17 +54,40 @@
+ 
+         if self.child_pid:  # parent
+             ret = os.waitpid(self.child_pid, 1)
+-            print ret
+-            
++            # Maybe we should check ret[1], which stores childs exit status.
++            try:
++                child_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
++                path_to_output = run_dir + '/' + output_file_name
++                output_lines = open(path_to_output, 'r').readlines()
++                file_contents = ''.join(output_lines)
++                if file_contents == expected:
++                    return True
++                else:
++                    print "No match actual [[", file_contents, "]] and " \
++                          "expected [[", expected, "]]"
++                    return False
++                
++            except IOError, e:
++                print 'in child of parent of judge_exact', e
++                return False  # Couldn't read file?
++                
+         else:  # child
+-            # set resource limits with resource
+-            self.chroot_or_chdir(run_dir)
++            # set resource limits with resource module
++            try:
++                self.chroot_or_chdir(run_dir)
++                # Call _exit rather than exit since exit raises a SystemExit,
++                # and we want to be more discrete.  If the ordinary exit is
++                # called, then pyunit will catch systemExit, which causes this
++                # test to fail.
++                # Maybe we should use subprocess rather than system, so
++                # no shell calls are performed.
++                os._exit(os.system('(' + cmd + ') >' + output_file_name))
++                #os.sl
++            except SecurityException:
++                os._exit(1)
+ 
+-            os.system(cmd + '>' + output_file_name)
+-            sys.exit(0)
+             
+-            
+-
+-
+-    
+-    
++class SecurityException(Exception):
++    """ A SecurityException is raised when the judge refuses to continue
++    due to some sort of security violation"""
++    pass
+
+Modified: trunk/judge/naked_judge_unittest.py
+===================================================================
+--- trunk/judge/naked_judge_unittest.py	2005-11-11 04:26:09 UTC (rev 19)
++++ trunk/judge/naked_judge_unittest.py	2005-11-12 04:37:25 UTC (rev 20)
+@@ -1,15 +1,24 @@
+ #!/usr/bin/python
+ 
++import os
+ import unittest
+ import naked_judge
+ 
+ class NakedJudgeTestCase(unittest.TestCase):
+     def setUp(self):
+-        self.judger = naked_judge.NakedJudge()
++        if os.getuid() == 0:
++            # We are root, we can use security measures such as chroot,
++            # so insecurity is not allowed.
++            self.judger = naked_judge.NakedJudge(allow_insecurity = False)
++        else:
++            # We don't have the capabilities to do fancy things, run
++            # insecurely
++            self.judger = naked_judge.NakedJudge(allow_insecurity = True)
+         
+     def testAccepted(self):
+-        ret = self.judger.judge_exact('echo 1', '\n')
+-        
++        self.assertTrue(self.judger.judge_exact('echo 1', '1\n'))
++        self.assertFalse(self.judger.judge_exact('echo 1', '\n'))
+ 
++
+ if __name__ == "__main__":
+     unittest.main()
+
+
+
+From dgott at berlios.de  Sat Nov 12 07:31:40 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Sat, 12 Nov 2005 07:31:40 +0100
+Subject: [Threec-svn] r21 - in trunk/threec/threec: . templates
+Message-ID: <200511120631.jAC6Vekl003500@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-11-12 07:31:37 +0100 (Sat, 12 Nov 2005)
+New Revision: 21
+
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/model.py
+   trunk/threec/threec/templates/editcontest.kid
+Log:
+not too shabby
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-12 04:37:25 UTC (rev 20)
++++ trunk/threec/threec/controllers.py	2005-11-12 06:31:37 UTC (rev 21)
+@@ -24,18 +24,83 @@
+ 
+     return True
+ 
++def problemUrl(id):
++    volume = id / 1000 + 1
++    problem = id % 1000
++    problem = str(problem)
++
++    if(int(problem) < 100):
++	problem = '0' + problem
++    if(int(problem) < 10):
++	problem = '0' + problem
++
++    return 'http://localhost:8080/problems/' + 'i'*(volume) + '/' + problem + '/'
++
++def pageName(id):
++    #base = 'http://localhost:8080/problems/'
++    volume = id / 1000 + 1
++    problem = id % 1000
++    problem = str(problem)
++
++    if(int(problem) < 100):
++	problem = '0' + problem
++    if(int(problem) < 10):
++	problem = '0' + problem
++
++    base = 'i'*volume + '_' + problem
++    return base
++
++def html(problemName,problemStmt):
++    ret = '<html><head>' + problemName + '</head><body>' + problemStmt + '</body></html>'
++    return ret
++
+ class Root:
+ 
+     @turbogears.expose(html='threec.templates.editcontest')
+-    def savecontest(self,user,name,syear,smonth,sday,shour,smin,eyear,emonth,eday,ehour,emin):
++    def remove(self,userId,contestId,problemId):
++	Problem.delete(problemId)
++	return self.editcontest(contestId,userId)
++
++    @turbogears.expose(html='threec.templates.editcontest')
++    def addproblem(self,name,author,stmt,time,memory,correct,contestId,userId):
++	problem = Problem(problemName=name,timelimit=int(time),memlimit=int(memory),correctness=int(correct),author=author,contest=Contest.get(contestId))
++	page = Page(pagename=pageName(problem.id),data=html(name,stmt))
++	problem.problemUrl = problemUrl(problem.id)
++	return self.editcontest(contestId,userId)
++
++    @turbogears.expose(html='threec.templates.editcontest')
++    def savecontest(self,userId,contestId,name,syear,smonth,sday,shour,smin,eyear,emonth,eday,ehour,emin):
++	syear = int(syear);smonth=int(smonth);sday=int(sday);shour=int(shour);smin=int(smin)
++	eyear = int(eyear);emonth=int(emonth);eday=int(eday);ehour=int(ehour);emin=int(emin)
++
+ 	start = datetime.datetime(syear,smonth,sday,shour)
+ 	end = datetime.datetime(eyear,emonth,eday,ehour)
+-	contest = Contest(start=start,end=end,name=name,user=user)
++
++	contestId = int(contestId)
++
++	if(start > end):
++	    message = ['The start datetime must be before the end datetime']
++	    if contestId:
++		problemset = Contest.get(contestId).problemset
++	    else:
++		problemset = []
++	    return dict(name=name,message=message,start=start,end=end,userId=userId,contestId=contestId,problemset=problemset)
++
++	if contestId:
++	    contest = Contest.get(contestId)
++	    contest.set(start=start,end=end)
++	else:
++	    contest = Contest(start=start,end=end,name=name,user=userId)
++	    contestId = contest.id
++
+ 	ret = {}
+ 	ret['name']=name
+ 	ret['start']=start
+ 	ret['end']=end
+-	ret['user']=user
++	ret['userId']=userId
++	ret['problemset']=contest.problemset
++	ret['contestId']=contestId
++
+ 	return ret
+ 
+     @turbogears.expose(html="threec.templates.homepage")
+@@ -52,10 +117,9 @@
+     def editcontest(self,contestId,userId):
+ 	contestId = int(contestId)
+ 	name = ''
+-	start = ''
+-	end = ''
++	start = datetime.datetime.now()
++	end = datetime.datetime.now()
+ 	problems = []
+-	ret = {'name':name,'start':start,'end':end,'problemset':problems,'user':userId}
+ 
+ 	if contestId:
+ 	    contest = Contest.get(contestId)
+@@ -64,6 +128,8 @@
+ 	    end = contest.end
+ 	    problems = contest.problemset
+ 
++	ret = {'name':name,'start':start,'end':end,'problemset':problems,'userId':userId,'contestId':contestId}
++
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.hosting')
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-11-12 04:37:25 UTC (rev 20)
++++ trunk/threec/threec/model.py	2005-11-12 06:31:37 UTC (rev 21)
+@@ -26,7 +26,7 @@
+     '''Each problem gets an entry in here'''
+     _connection = hub
+     author = StringCol(notNone=True)
+-    problemName = StringCol(notNone=True)
++    problemName = StringCol(notNone=True,unique=True)
+     problemUrl = StringCol(default='/searchProblems')
+     timelimit = IntCol(default=10)
+     memlimit = IntCol(default=512)
+
+Modified: trunk/threec/threec/templates/editcontest.kid
+===================================================================
+--- trunk/threec/threec/templates/editcontest.kid	2005-11-12 04:37:25 UTC (rev 20)
++++ trunk/threec/threec/templates/editcontest.kid	2005-11-12 06:31:37 UTC (rev 21)
+@@ -7,48 +7,52 @@
+     <title>Edit A Contest</title>
+ </head>
+ 
++<?python
++   import datetime
++   year = int(datetime.datetime.now().year)
++?>
++
+ <body>
+ 
+   <form action="savecontest" method="post"> 
+     Name:<textarea rows="1" name="name">${name}</textarea><br />
+     Start:
+     <select name="syear">
+-      <option value="2005">2005</option>
+-      <option value="2005">2006</option>
++      <option py:for="x in range(2)" py:attrs="dict(value=x+year,selected=(start.year==(x+year) and 'selected' or None))">${x+year}</option>
+     </select>
+     <select name="smonth" selected="11">
+-      <option py:for="x in range(12)" value="${x+1}">${x+1}</option>
++      <option py:for="x in range(12)" py:attrs="dict(value=x+1,selected=(start.month==(x+1) and 'selected' or None))">${x+1}</option>
+     </select>
+     <select name="sday">
+-      <option py:for="x in range(30)" value="${x+1}">${x+1}</option>
++      <option py:for="x in range(30)" py:attrs="dict(value=x+1,selected=(start.day==(x+1) and 'selected' or None))">${x+1}</option>
+     </select>
+     <select name="shour">
+-      <option py:for="x in range(24)" value="${x}">${x}</option>
++      <option py:for="x in range(24)" py:attrs="dict(value=x,selected=(start.hour==(x) and 'selected' or None))">${x}</option>
+     </select>
+     <select name="smin">
+-      <option py:for="x in range(60)" value="${x}">${x}</option>
++      <option py:for="x in range(60)" py:attrs="dict(value=x,selected=(start.minute==(x) and 'selected' or None))">${x}</option>
+     </select>
+ 
+     <br />End:
+     <select name="eyear">
+-      <option value="2005">2005</option>
+-      <option value="2005">2006</option>
++      <option py:for="x in range(2)" py:attrs="dict(value=x+year,selected=(end.year==(x+year) and 'selected' or None))">${x+year}</option>
+     </select>
+     <select name="emonth">
+-      <option py:for="x in range(12)" value="${x+1}">${x+1}</option>
++      <option py:for="x in range(12)" py:attrs="dict(value=x+1,selected=(end.month==(x+1) and 'selected' or None))">${x+1}</option>
+     </select>
+     <select name="eday">
+-      <option py:for="x in range(30)" value="${x+1}">${x+1}</option>
++      <option py:for="x in range(30)" py:attrs="dict(value=x+1,selected=(end.day==(x+1) and 'selected' or None))">${x+1}</option>
+     </select>
+     <select name="ehour">
+-      <option py:for="x in range(24)" value="${x}">${x}</option>
++      <option py:for="x in range(24)" py:attrs="dict(value=x,selected=(end.hour==(x) and 'selected' or None))">${x}</option>
+     </select>
+     <select name="emin">
+-      <option py:for="x in range(60)" value="${x}">${x}</option>
++      <option py:for="x in range(60)" py:attrs="dict(value=x,selected=(end.minute==(x) and 'selected' or None))">${x}</option>
+     </select>
+ 
+-    <input type="hidden" name="userId" value="${user}" />
+-    <br /><input type="submit" name="submit" value="Save"/> 
++    <input type="hidden" name="userId" value="${userId}" />
++    <input type="hidden" name="contestId" value="${contestId}" />
++    <br /><input type="submit" value="Save"/> 
+   </form>
+   
+   <table>
+@@ -58,17 +62,20 @@
+     <hr />
+     <tr py:for="prob in problemset">
+       <td><a href="${prob.problemUrl}">${prob.problemName}</a></td>
+-      <td><a href="/remove?problem=${prob.id}">Remove</a></td>
++      <td><a href="/remove?problemId=${prob.id}&amp;userId=${userId}&amp;contestId=${contestId}">Remove</a></td>
+     </tr>
+   </table>
+   
+   <form action="addproblem" method="post">
+     Name:<textarea rows="1" name="name"></textarea><br />
++    Author:<textarea rows="1" name="author"></textarea><br />
+     Statement:<textarea rows="1" name="stmt"></textarea><br />
+     Time Limit:<textarea rows="1" name="time">10</textarea><br />
+     Memory Limit:<textarea rows="1" name="memory">100</textarea><br />
+     Correctness:<textarea rows="1" name="correct">100</textarea><br />
+-    <input type="submit" name="submit" value="Add Problem to Contest"/>
++    <input type="hidden" name="userId" value="${userId}" />
++    <input type="hidden" name="contestId" value="${contestId}" />
++    <input type="submit" value="Add Problem to Contest"/>
+   </form>
+ 
+ </body>
+
+
+
+From dgott at berlios.de  Sun Nov 13 03:36:10 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Sun, 13 Nov 2005 03:36:10 +0100
+Subject: [Threec-svn] r22 - in trunk/threec/threec: . templates
+Message-ID: <200511130236.jAD2aAS3029382@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-11-13 03:36:05 +0100 (Sun, 13 Nov 2005)
+New Revision: 22
+
+Added:
+   trunk/threec/threec/templates/submissions.kid
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/templates/managecontests.kid
+Log:
+more coolness
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-12 06:31:37 UTC (rev 21)
++++ trunk/threec/threec/controllers.py	2005-11-13 02:36:05 UTC (rev 22)
+@@ -56,6 +56,10 @@
+ 
+ class Root:
+ 
++    @turbogears.expose(html='threec.templates.submissions')
++    def submissions(self,contestId):
++	return dict(submissions=Contest.get(contestId).submission)
++
+     @turbogears.expose(html='threec.templates.editcontest')
+     def remove(self,userId,contestId,problemId):
+ 	Problem.delete(problemId)
+
+Modified: trunk/threec/threec/templates/managecontests.kid
+===================================================================
+--- trunk/threec/threec/templates/managecontests.kid	2005-11-12 06:31:37 UTC (rev 21)
++++ trunk/threec/threec/templates/managecontests.kid	2005-11-13 02:36:05 UTC (rev 22)
+@@ -21,10 +21,10 @@
+       </tr>
+       <tr><td width="100%" align="center">Upcoming Contest</td></tr>
+       <tr py:for="contest in upcoming" align="center">
+-	<td><a href="/editcontest?contestId=${contest.id}&user=${user}">${contest.name}</a></td>
++	<td><a href="/editcontest?contestId=${contest.id}&userId=${userId}">${contest.name}</a></td>
+ 	<td>{$contest.start}</td><td>{$contest.end}</td>
+       </tr>
+     </table>
+-    <a href="/editcontest?contestId=0&user=${user}">Add a new contest</a>
++    <a href="/editcontest?contestId=0&userId=${userId}">Add a new contest</a>
+   </body>
+ </html>
+
+Added: trunk/threec/threec/templates/submissions.kid
+===================================================================
+--- trunk/threec/threec/templates/submissions.kid	2005-11-12 06:31:37 UTC (rev 21)
++++ trunk/threec/threec/templates/submissions.kid	2005-11-13 02:36:05 UTC (rev 22)
+@@ -0,0 +1,26 @@
++<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
++<html xmlns="http://www.w3.org/1999/xhtml" xmlns:py="http://purl.org/kid/ns#"
++      py:extends="'master.kid'">
++
++  <head>
++    <meta content="text/html; charset=UTF-8" http-equiv="content-type" />
++    <title>View The Contest Log</title>
++  </head>
++  
++  <body>
++    <table>
++      <tr align="center">
++	<td>User Name</td><td>Problem</td><td>Result</td><td>Speed</td><td>Memory</td><td>Time</td><td>Code</td>
++      </tr>
++      <tr py:for="subm in submissions" align="center">
++	<td>${subm.user.user}</td>
++	<td>${subm.problem.problemName}</td>
++	<td>${subm.response}</td>
++	<td>${subm.speed}</td>
++	<td>${subm.memory}</td>
++	<td>${subm.time}</td>
++	<td><a href="/viewcode?submissionId=${subm.id}">${subm.language}</a></td>
++      </tr>
++    </table>
++  </body>
++</html>
+
+
+
+From dgott at berlios.de  Sun Nov 13 15:52:17 2005
+From: dgott at berlios.de (Daniel Gottlieb at BerliOS)
+Date: Sun, 13 Nov 2005 15:52:17 +0100
+Subject: [Threec-svn] r23 - in trunk/threec/threec: . templates
+Message-ID: <200511131452.jADEqHGN004867@sheep.berlios.de>
+
+Author: dgott
+Date: 2005-11-13 15:52:16 +0100 (Sun, 13 Nov 2005)
+New Revision: 23
+
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/templates/editcontest.kid
+Log:
+individual problems are now editable
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-13 02:36:05 UTC (rev 22)
++++ trunk/threec/threec/controllers.py	2005-11-13 14:52:16 UTC (rev 23)
+@@ -54,6 +54,12 @@
+     ret = '<html><head>' + problemName + '</head><body>' + problemStmt + '</body></html>'
+     return ret
+ 
++def stripHtml(source):
++    '''returns the text between the leftmost <body> and rightmost </body> tags'''
++    fidx = source[source.index('<body>')+len('<body>'):source.rindex('</body>')]
++    print fidx
++    return fidx
++
+ class Root:
+ 
+     @turbogears.expose(html='threec.templates.submissions')
+@@ -66,10 +72,19 @@
+ 	return self.editcontest(contestId,userId)
+ 
+     @turbogears.expose(html='threec.templates.editcontest')
+-    def addproblem(self,name,author,stmt,time,memory,correct,contestId,userId):
+-	problem = Problem(problemName=name,timelimit=int(time),memlimit=int(memory),correctness=int(correct),author=author,contest=Contest.get(contestId))
+-	page = Page(pagename=pageName(problem.id),data=html(name,stmt))
+-	problem.problemUrl = problemUrl(problem.id)
++    def addproblem(self,name,author,stmt,time,memory,correct,contestId,userId,problemId):
++	problemId = int(problemId)
++
++	if problemId:
++	    problem = Problem.get(problemId)
++	    problem.set(problemName=name,timelimit=int(time),memlimit=int(memory),correctness=int(correct),author=author,contest=Contest.get(contestId))
++	    page = Page.byPagename(pageName(problemId))
++	    page.set(data=html(name,stmt))
++	else:
++	    problem = Problem(problemName=name,timelimit=int(time),memlimit=int(memory),correctness=int(correct),author=author,contest=Contest.get(contestId))
++	    page = Page(pagename=pageName(problem.id),data=html(name,stmt))
++	    problem.problemUrl = problemUrl(problem.id)
++
+ 	return self.editcontest(contestId,userId)
+ 
+     @turbogears.expose(html='threec.templates.editcontest')
+@@ -118,8 +133,10 @@
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.editcontest')
+-    def editcontest(self,contestId,userId):
++    def editcontest(self,contestId,userId,problemId=0):
+ 	contestId = int(contestId)
++	problemId = int(problemId)
++
+ 	name = ''
+ 	start = datetime.datetime.now()
+ 	end = datetime.datetime.now()
+@@ -132,8 +149,20 @@
+ 	    end = contest.end
+ 	    problems = contest.problemset
+ 
+-	ret = {'name':name,'start':start,'end':end,'problemset':problems,'userId':userId,'contestId':contestId}
++	ret = {'name':name,'start':start,'end':end,'problemset':problems,'userId':userId,'contestId':contestId,'problemId':problemId}
++	ret['pname']=ret['pauthor']=ret['pstmt']=''
++	ret['ptime']=10
++	ret['pmem']=ret['pcor']=100
+ 
++	if problemId:
++	    prob = Problem.get(problemId)
++	    ret['pname'] = prob.problemName
++	    ret['pauthor'] = prob.author
++	    ret['ptime'] = prob.timelimit
++	    ret['pmem'] = prob.memlimit
++	    ret['pcor'] = prob.correctness
++	    ret['pstmt'] = stripHtml(Page.byPagename(pageName(problemId)).data)
++
+ 	return ret
+ 
+     @turbogears.expose(html='threec.templates.hosting')
+
+Modified: trunk/threec/threec/templates/editcontest.kid
+===================================================================
+--- trunk/threec/threec/templates/editcontest.kid	2005-11-13 02:36:05 UTC (rev 22)
++++ trunk/threec/threec/templates/editcontest.kid	2005-11-13 14:52:16 UTC (rev 23)
+@@ -62,17 +62,19 @@
+     <hr />
+     <tr py:for="prob in problemset">
+       <td><a href="${prob.problemUrl}">${prob.problemName}</a></td>
++      <td><a href="/editcontest?problemId=${prob.id}&amp;userId=${userId}&amp;contestId=${contestId}">Edit</a></td>
+       <td><a href="/remove?problemId=${prob.id}&amp;userId=${userId}&amp;contestId=${contestId}">Remove</a></td>
+     </tr>
+   </table>
+   
+   <form action="addproblem" method="post">
+-    Name:<textarea rows="1" name="name"></textarea><br />
+-    Author:<textarea rows="1" name="author"></textarea><br />
+-    Statement:<textarea rows="1" name="stmt"></textarea><br />
+-    Time Limit:<textarea rows="1" name="time">10</textarea><br />
+-    Memory Limit:<textarea rows="1" name="memory">100</textarea><br />
+-    Correctness:<textarea rows="1" name="correct">100</textarea><br />
++    Name:<textarea rows="1" name="name">${pname}</textarea><br />
++    Author:<textarea rows="1" name="author">${pauthor}</textarea><br />
++    Statement:<textarea rows="1" name="stmt">${pstmt}</textarea><br />
++    Time Limit:<textarea rows="1" name="time">${ptime}</textarea><br />
++    Memory Limit:<textarea rows="1" name="memory">${pmem}</textarea><br />
++    Correctness:<textarea rows="1" name="correct">${pcor}</textarea><br />
++    <input type="hidden" name="problemId" value="${problemId}" />
+     <input type="hidden" name="userId" value="${userId}" />
+     <input type="hidden" name="contestId" value="${contestId}" />
+     <input type="submit" value="Add Problem to Contest"/>
+
+
+
+From rrenaud at berlios.de  Sun Nov 20 01:24:55 2005
+From: rrenaud at berlios.de (rrenaud at BerliOS)
+Date: Sun, 20 Nov 2005 01:24:55 +0100
+Subject: [Threec-svn] r24 - trunk/judge
+Message-ID: <200511200024.jAK0OtBe015909@sheep.berlios.de>
+
+Author: rrenaud
+Date: 2005-11-20 01:24:52 +0100 (Sun, 20 Nov 2005)
+New Revision: 24
+
+Added:
+   trunk/judge/judge_logger.py
+Modified:
+   trunk/judge/IDEAS
+   trunk/judge/naked_judge.py
+Log:
+Comitted judger that is actually passing unit tests 100% of the time
+
+Modified: trunk/judge/IDEAS
+===================================================================
+--- trunk/judge/IDEAS	2005-11-13 14:52:16 UTC (rev 23)
++++ trunk/judge/IDEAS	2005-11-20 00:24:52 UTC (rev 24)
+@@ -6,3 +6,14 @@
+ error) diffing.  It seems cleaner to call a module than shell out to 
+ diff -b.
+ 
++How to write specific judgers?
++Option 1, implement some python func/class to do judging
++   Pros:  Nice integration with the rest of the code, can do things like 
++        catching exceptions, etc
++   Cons:  The judger must be written in Python, might not be right for the
++        general community.
++
++Option 2: implement a program that reads program output from stdin and 
++          returns true iff the program was correct
++   Pros: More unixy, can write judge in any lang
++   Cons: A bit more unwieldy.
+\ No newline at end of file
+
+Added: trunk/judge/judge_logger.py
+===================================================================
+--- trunk/judge/judge_logger.py	2005-11-13 14:52:16 UTC (rev 23)
++++ trunk/judge/judge_logger.py	2005-11-20 00:24:52 UTC (rev 24)
+@@ -0,0 +1,12 @@
++#!/usr/bin/python
++
++"""A file with judge logging configuration"""
++
++import logging
++import sys
++
++_judge_logger = logging.getLogger('judge')
++console = logging.StreamHandler()
++console.setLevel(logging.ERROR)
++_judge_logger.addHandler(console)
++
+
+Modified: trunk/judge/naked_judge.py
+===================================================================
+--- trunk/judge/naked_judge.py	2005-11-13 14:52:16 UTC (rev 23)
++++ trunk/judge/naked_judge.py	2005-11-20 00:24:52 UTC (rev 24)
+@@ -8,11 +8,19 @@
+ trusted, but it probably isn't sufficient for running a public contest
+ over the internet."""
+ 
++import judge_logger
++import logging
+ import os
+ import random
+ import resource
++import shutil
+ import sys
++import subprocess
++import time
+ 
++logger = logging.getLogger('judge')
++logger.setLevel(logging.DEBUG)
++
+ class NakedJudge:
+     """The NakedJudge runs code using standard Unix jailing techniques."""
+ 
+@@ -39,9 +47,68 @@
+             if self._allow_insecurity:
+                 os.chdir(dir)
+                 return
+-            raise SecurityException("Judger cannot chroot and refuses to"
++            raise SecurityException("Judger cannot chroot and refuses to "
+                                     "chdir because insecurity is not allowed")
+ 
++    def _wait_for_child_and_judge(self, child_pid, expected, full_output_name):
++        logger.debug('parent before wait')
++        ret = os.waitpid(child_pid, 0)
++        logger.debug('parent after wait')
++        #time.sleep(.1)
++        # Maybe we should check ret[1], which stores childs exit status.
++        try:
++            child_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
++            logger.debug('Parent: reading ' +  full_output_name)
++            output_lines = open(full_output_name, 'r').readlines()
++            file_contents = ''.join(output_lines)
++            if file_contents == expected:
++                return True
++            else:
++                logger.debug("No match actual [[ %s]] and expected [[ %s ]]"
++                              % (file_contents, expected))
++
++                return False
++
++        except IOError, e:
++            logger.debug('in parent of judge_exact' + str(e))
++            return False  # Couldn't read file?
++
++    def _run_jailed_child_and_exit(self, cmd, run_dir, output_file_name):
++        # set resource limits with resource module
++        try:
++            self.chroot_or_chdir(run_dir)
++            # change to "judged" user
++            # Call _exit rather than exit since exit raises a SystemExit,
++            # and we want to be more discrete.  If the ordinary exit is
++            # called, then pyunit will catch systemExit, which causes this
++            # test to fail.
++            # Maybe we should use subprocess rather than system, so
++            # no shell calls are performed.
++            args = cmd.split()
++            logger.info("running cmd " +  cmd)
++            judged_proc = subprocess.Popen(args, stdout = subprocess.PIPE,
++                                           close_fds = True)
++            # I thought about using a pipeline for juding and using
++            # return codes for determining correctness, like
++            # ./submitted_binary < file | judger,
++            # but untrusted submitted binary can simply replace the judger
++            # program with 'exit 0' and then their malicious program would
++            # be correct.
++            # To avoid this, the output of the submitted binary is
++            # copied to a file, and then the judger runs from the
++            # parent (protected for the submitted code , hopefully, by
++            # at least a chroot and different user).
++            output_file = open(output_file_name, 'w')
++            shutil.copyfileobj(judged_proc.stdout, output_file)
++            output_file.close()
++            logger.debug('copied to %s/%s' % (run_dir, output_file_name))
++            assert os.access(output_file_name, os.R_OK)
++            logger.debug('Child: file contents %s' % (
++                open(output_file_name, 'r').read()))
++            os._exit(0)
++        except SecurityException:
++            os._exit(1)
++
+     def judge_exact(self, cmd, expected):
+         """ @return JudgeResult containing the result of running cmd against
+         expected output.  Run is successful only if the actual output is
+@@ -50,42 +117,18 @@
+         os.mkdir(run_dir)
+         output_file_name = self.get_output_filename()
+ 
+-        self.child_pid = os.fork()
++        forked_pid = os.fork()
++        logger.debug("got pid %d" % forked_pid)
+ 
+-        if self.child_pid:  # parent
+-            ret = os.waitpid(self.child_pid, 1)
+-            # Maybe we should check ret[1], which stores childs exit status.
+-            try:
+-                child_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+-                path_to_output = run_dir + '/' + output_file_name
+-                output_lines = open(path_to_output, 'r').readlines()
+-                file_contents = ''.join(output_lines)
+-                if file_contents == expected:
+-                    return True
+-                else:
+-                    print "No match actual [[", file_contents, "]] and " \
+-                          "expected [[", expected, "]]"
+-                    return False
+-                
+-            except IOError, e:
+-                print 'in child of parent of judge_exact', e
+-                return False  # Couldn't read file?
+-                
++        if forked_pid:  # parent
++            full_output_path = run_dir + '/' + output_file_name
++            return self._wait_for_child_and_judge(forked_pid,
++                                                  expected, full_output_path)
++
+         else:  # child
+-            # set resource limits with resource module
+-            try:
+-                self.chroot_or_chdir(run_dir)
+-                # Call _exit rather than exit since exit raises a SystemExit,
+-                # and we want to be more discrete.  If the ordinary exit is
+-                # called, then pyunit will catch systemExit, which causes this
+-                # test to fail.
+-                # Maybe we should use subprocess rather than system, so
+-                # no shell calls are performed.
+-                os._exit(os.system('(' + cmd + ') >' + output_file_name))
+-                #os.sl
+-            except SecurityException:
+-                os._exit(1)
+-
++            logger.debug('in child')
++            self._run_jailed_child_and_exit(cmd, run_dir, output_file_name)
++            assert False, "jailed child should have exited"
+             
+ class SecurityException(Exception):
+     """ A SecurityException is raised when the judge refuses to continue
+
+
+
+From rrenaud at berlios.de  Mon Nov 28 03:50:03 2005
+From: rrenaud at berlios.de (rrenaud at BerliOS)
+Date: Mon, 28 Nov 2005 03:50:03 +0100
+Subject: [Threec-svn] r25 - trunk/judge
+Message-ID: <200511280250.jAS2o3Qf013779@sheep.berlios.de>
+
+Author: rrenaud
+Date: 2005-11-28 03:49:35 +0100 (Mon, 28 Nov 2005)
+New Revision: 25
+
+Added:
+   trunk/judge/resource_limit.py
+Modified:
+   trunk/judge/judge_logger.py
+   trunk/judge/naked_judge.py
+   trunk/judge/naked_judge_unittest.py
+Log:
+Now cpu limit test passes
+
+Modified: trunk/judge/judge_logger.py
+===================================================================
+--- trunk/judge/judge_logger.py	2005-11-20 00:24:52 UTC (rev 24)
++++ trunk/judge/judge_logger.py	2005-11-28 02:49:35 UTC (rev 25)
+@@ -8,5 +8,6 @@
+ _judge_logger = logging.getLogger('judge')
+ console = logging.StreamHandler()
+ console.setLevel(logging.ERROR)
++# console.setLevel(logging.DEBUG) # uncomment for more verbose output
+ _judge_logger.addHandler(console)
+ 
+
+Modified: trunk/judge/naked_judge.py
+===================================================================
+--- trunk/judge/naked_judge.py	2005-11-20 00:24:52 UTC (rev 24)
++++ trunk/judge/naked_judge.py	2005-11-28 02:49:35 UTC (rev 25)
+@@ -9,6 +9,7 @@
+ over the internet."""
+ 
+ import judge_logger
++import resource_limit
+ import logging
+ import os
+ import random
+@@ -27,6 +28,29 @@
+     def __init__(self, allow_insecurity = False):
+         """@param allow_insecurity Should gaping vulnerabilities be allowed?"""
+         self._allow_insecurity = allow_insecurity
++
++    def judge_exact(self, cmd, expected):
++        """ @return JudgeResult containing the result of running cmd against
++        expected output.  Run is successful only if the actual output is
++        an exact match."""
++        run_dir = self.get_run_dir()
++        os.mkdir(run_dir)
++        output_file_name = self.get_output_filename()
++        resource_lim = resource_limit.ResourceLimit(cpu_lim = 1,
++                                                    mem_lim = 32 << 20)
++        forked_pid = os.fork()
++        logger.debug("got pid %d" % forked_pid)
++
++        if forked_pid:  # parent
++            full_output_path = run_dir + '/' + output_file_name
++            return self._wait_for_child_and_judge(forked_pid,
++                                                  expected, full_output_path)
++
++        else:  # child
++            logger.debug('in child')
++            resource_lim.enforce_limits()
++            self._run_jailed_child_and_exit(cmd, run_dir, output_file_name)
++            assert False, "jailed child should have exited"
+     
+     def get_run_dir(self):
+         """ @return The directory that this judger should use for its
+@@ -66,15 +90,56 @@
+             else:
+                 logger.debug("No match actual [[ %s]] and expected [[ %s ]]"
+                               % (file_contents, expected))
+-
+                 return False
+ 
+         except IOError, e:
+             logger.debug('in parent of judge_exact' + str(e))
+             return False  # Couldn't read file?
+ 
++    def _split_arglist(self, arglist):
++        """Split arglist into a list of whitespace delimited strings, except
++        that double quoted substrings are placed in a single element in the
++        returned list, with the quotes removed.
++
++        GOTCHAS: This doesn't group quoted strings which are not
++        'well-delimited'.  By well-delimited, we mean a quoted string whose
++        opening quote is bordered to the left by whitespace, and whose closing
++        quote is bordered to the right by whitespace.
++        f"o" and "fo"o are both not well-delimited.
++
++        Here are a few correct usage input/output to the function.
++        
++        'hi' -> ['hi']
++        'echo 1' -> ['echo', '1']
++        'echo "quoted string" more'  -> ['echo', 'quoted string', 'more']
++        """
++        split_at_space = [x for x in arglist.split(' ') if len(x) > 0]
++        ret = []
++        have_unclosed_quote = False
++        for item in split_at_space:
++            # Special case a quoted string containing no delimiters.
++            if len(item) == 1 and item[0] == '"' and item[-1] == '"':
++                ret.append(item[1:-1])
++                continue
++                
++            if not have_unclosed_quote and item[0] == '"':
++                item = item[1:]
++                # Make an new entry in the list to collect quoted string.
++                ret.append('')  
++                have_unclosed_quote = True
++                
++            if have_unclosed_quote:
++                if len(item) > 0 and item[-1] == '"':
++                    item = item[:-1]
++                    have_unclosed_quote = False
++                if len(ret[-1]) > 0: ret[-1] += ' '
++                ret[-1] += item
++            else:
++                ret.append(item)
++                
++        return ret
++
+     def _run_jailed_child_and_exit(self, cmd, run_dir, output_file_name):
+-        # set resource limits with resource module
+         try:
+             self.chroot_or_chdir(run_dir)
+             # change to "judged" user
+@@ -84,7 +149,7 @@
+             # test to fail.
+             # Maybe we should use subprocess rather than system, so
+             # no shell calls are performed.
+-            args = cmd.split()
++            args = self._split_arglist(cmd)
+             logger.info("running cmd " +  cmd)
+             judged_proc = subprocess.Popen(args, stdout = subprocess.PIPE,
+                                            close_fds = True)
+@@ -109,26 +174,7 @@
+         except SecurityException:
+             os._exit(1)
+ 
+-    def judge_exact(self, cmd, expected):
+-        """ @return JudgeResult containing the result of running cmd against
+-        expected output.  Run is successful only if the actual output is
+-        an exact match."""
+-        run_dir = self.get_run_dir()
+-        os.mkdir(run_dir)
+-        output_file_name = self.get_output_filename()
+ 
+-        forked_pid = os.fork()
+-        logger.debug("got pid %d" % forked_pid)
+-
+-        if forked_pid:  # parent
+-            full_output_path = run_dir + '/' + output_file_name
+-            return self._wait_for_child_and_judge(forked_pid,
+-                                                  expected, full_output_path)
+-
+-        else:  # child
+-            logger.debug('in child')
+-            self._run_jailed_child_and_exit(cmd, run_dir, output_file_name)
+-            assert False, "jailed child should have exited"
+             
+ class SecurityException(Exception):
+     """ A SecurityException is raised when the judge refuses to continue
+
+Modified: trunk/judge/naked_judge_unittest.py
+===================================================================
+--- trunk/judge/naked_judge_unittest.py	2005-11-20 00:24:52 UTC (rev 24)
++++ trunk/judge/naked_judge_unittest.py	2005-11-28 02:49:35 UTC (rev 25)
+@@ -18,7 +18,29 @@
+     def testAccepted(self):
+         self.assertTrue(self.judger.judge_exact('echo 1', '1\n'))
+         self.assertFalse(self.judger.judge_exact('echo 1', '\n'))
++        # Since the command passed to judge exact won't do any shell magic,
++        # we fudge a sleep x && echo 10 by writing a short inline python
++        # program.
++        waiter_template_program = '"import time\n' + \
++                                  'start = time.time()\n' + \
++                                  'while time.time() - start < %d: pass\n' + \
++                                  'print 10\n"'
+ 
++        prints_10_quickly = 'python -c ' + (waiter_template_program % 0)
++        prints_10_slowly = 'python -c ' + (waiter_template_program % 2)
++        self.assertTrue(self.judger.judge_exact(prints_10_quickly, '10\n'))
++        # The second call should timeout.
++        self.assertFalse(self.judger.judge_exact(prints_10_slowly, '10\n'))
+ 
++    def testSplitArglist(self):
++        input_output = [('echo', ['echo']),
++                        ('echo 1', ['echo', '1']),
++                        ('echo "hi"', ['echo', 'hi']),
++                        ('echo "hello 1 2 3"', ['echo', 'hello 1 2 3']),
++                        ('echo "hello    1    2 3"', ['echo', 'hello 1 2 3'])]
++        for in_val, out_val in input_output:
++            self.assertEquals(self.judger._split_arglist(in_val), out_val)
++
++
+ if __name__ == "__main__":
+     unittest.main()
+
+Added: trunk/judge/resource_limit.py
+===================================================================
+--- trunk/judge/resource_limit.py	2005-11-20 00:24:52 UTC (rev 24)
++++ trunk/judge/resource_limit.py	2005-11-28 02:49:35 UTC (rev 25)
+@@ -0,0 +1,35 @@
++#!/usr/bin/python
++"""The ResourceLimit class represents the amount of resources that a process
++can use.  It contains methods for setting the resources used by the process,
++as well as checking which resource was exceeded."""
++
++import resource
++
++class ResourceLimit:
++    """The ResourceLimit class is lazy, setting limits has no effect on
++    the process until enforce_limits is called."""
++
++    def __init__(self, mem_lim = 32 << 20, num_proc = 10, cpu_lim = 10):
++        """Create a Resourcelimit with the given constraints on memory,
++        number of processes, and CPU limit.  Note that this will NOT
++        set the limits, you must call enforce_limits() to actually set the
++        limit."""
++        self._mem_lim = mem_lim
++        self._num_proc = num_proc
++        self._cpu_lim = cpu_lim
++
++    def enforce_limits(self):
++        """Ensure that this process cannot exceed our current
++        ResourceLimit."""
++        self._set_lim(resource.RLIMIT_CPU, self._cpu_lim)
++        self._set_lim(resource.RLIMIT_AS, self._mem_lim)
++        #self._set_lim(resource.RLIMIT_NPROC, self._num_proc)
++
++    def exceeds_limits(self, rusage):
++        """Return true iff rusage which is of type resource.struct_rusage
++        exceeds the current memory limit"""
++        pass
++        
++    def _set_lim(self, lim_type, lim_val):
++        resource.setrlimit(lim_type, (lim_val, lim_val))
++
+
+
+

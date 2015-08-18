@@ -1,0 +1,383 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<HTML>
+ <HEAD>
+   <TITLE> [Threec-svn] r14 - in trunk/threec: . threec threec/templates
+   </TITLE>
+   <LINK REL="Index" HREF="http://lists.berlios.de/pipermail/threec-svn/2005-November/index.html" >
+   <LINK REL="made" HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r14%20-%20in%20trunk/threec%3A%20.%20threec%20threec/templates&In-Reply-To=%3C200511060524.jA65O9ND019712%40sheep.berlios.de%3E">
+   <META NAME="robots" CONTENT="index,nofollow">
+   <style type="text/css">
+       pre {
+           white-space: pre-wrap;       /* css-2.1, curent FF, Opera, Safari */
+           }
+   </style>
+   <META http-equiv="Content-Type" content="text/html; charset=us-ascii">
+   <LINK REL="Previous"  HREF="000006.html">
+   <LINK REL="Next"  HREF="000008.html">
+ </HEAD>
+ <BODY BGCOLOR="#ffffff">
+   <H1>[Threec-svn] r14 - in trunk/threec: . threec threec/templates</H1>
+    <B>Daniel Gottlieb at BerliOS</B> 
+    <A HREF="mailto:threec-svn%40lists.berlios.de?Subject=Re%3A%20%5BThreec-svn%5D%20r14%20-%20in%20trunk/threec%3A%20.%20threec%20threec/templates&In-Reply-To=%3C200511060524.jA65O9ND019712%40sheep.berlios.de%3E"
+       TITLE="[Threec-svn] r14 - in trunk/threec: . threec threec/templates">dgott at berlios.de
+       </A><BR>
+    <I>Sun Nov  6 06:24:09 CET 2005</I>
+    <P><UL>
+        <LI>Previous message: <A HREF="000006.html">[Threec-svn] r13 - trunk/judge
+</A></li>
+        <LI>Next message: <A HREF="000008.html">[Threec-svn] r15 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+    <HR>  
+<!--beginarticle-->
+<PRE>Author: dgott
+Date: 2005-11-06 06:24:07 +0100 (Sun, 06 Nov 2005)
+New Revision: 14
+
+Added:
+   trunk/threec/threec/templates/contests.kid
+Removed:
+   trunk/threec/dev.cfg
+Modified:
+   trunk/threec/threec/controllers.py
+   trunk/threec/threec/model.py
+   trunk/threec/threec/templates/createuser.kid
+   trunk/threec/threec/templates/homepage.kid
+   trunk/threec/threec/templates/master.kid
+Log:
+hopefully better
+
+Deleted: trunk/threec/dev.cfg
+===================================================================
+--- trunk/threec/dev.cfg	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/dev.cfg	2005-11-06 05:24:07 UTC (rev 14)
+@@ -1,17 +0,0 @@
+-# This is where all of your settings go for your development environment
+-
+-[global]
+-server.environment=&quot;development&quot;
+-autoreload.package=&quot;threec&quot;
+-
+-# pick the form for your database
+-# sqlobject.dburi=&quot;<A HREF="postgres://username@hostname/databasename">postgres://username@hostname/databasename</A>&quot;
+-# sqlobject.dburi=&quot;<A HREF="mysql://username:password@hostname:port/databasename">mysql://username:password@hostname:port/databasename</A>&quot;
+-# sqlobject.dburi=&quot;<A HREF="sqlite:///Users/dgott/programming/python/threec/trunk/threec/alldata.db">sqlite:///Users/dgott/programming/python/threec/trunk/threec/alldata.db</A>&quot;
+-sqlobject.dburi=&quot;<A HREF="sqlite:///home/rob/code/trunk/threec/alldata.db">sqlite:///home/rob/code/trunk/threec/alldata.db</A>&quot;
+-
+-[session]
+-storeageType=&quot;ram&quot;
+-cookieName=&quot;C^3-Session-ID&quot;
+-timeout=60
+-cleanUpDelay=60
+
+Modified: trunk/threec/threec/controllers.py
+===================================================================
+--- trunk/threec/threec/controllers.py	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/controllers.py	2005-11-06 05:24:07 UTC (rev 14)
+@@ -1,5 +1,5 @@
+ import turbogears
+-from model import Page,hub,User
++from model import Page,hub,User,Contest,Submission,Problem
+ from sqlobject import SQLObjectNotFound
+ import cherrypy
+ import sha
+@@ -8,55 +8,65 @@
+ 
+     @turbogears.expose(html=&quot;threec.templates.homepage&quot;)
+     def index(self,unknown=False):
++	message = []
++	ret = {'message':message}
+ 	ret = {}
+ 	if unknown:
+-	    message = ['Unknown username/password']
+-	    ret['message']=message
++	    message.append('Unknown username/password')
+ 	    
+ 	return ret
+ 
+-    @turbogears.expose(html='threec.templates.edit')
+-    def edit(self,pagename,new=False):
+-	if not new:
+-	    page = Page.byPagename(pagename)
+-	    pagename = page.pagename
+-	    data = page.data
+-	else:
+-	    pagename = pagename
+-	    data = 'Edit me please'
+-	return dict(pagename=pagename,data=data)
++    @turbogears.expose(html='threec.templates.homepage')
++    def searchUsers(self,user):
++	message = []
++	try:
++	    message.append(User.byUser(user))
++	except SQLObjectNotFound:
++	    message.append('%s not found'%user)
++	ret = {'message':message}
++	return ret
+ 
+-    @turbogears.expose(html='threec.templates.userList')
+-    def searchuser(self,user,type):
+-	if type is 'coder':
+-	    type = 'Coder'
+-	else:
+-	    type = 'Problem Setter'
+-	return {'user':user,'type':type}
++    @turbogears.expose(html='threec.templates.homepage')
++    def default(self,*args,**kw):
++	message = [str(kw)]
++	message.append(str(args))
++	ret = {'message':message}
++	return ret
+ 
+-    def save(self,pagename,data,submit):
+-	hub.begin()
+-	page = Page.byPagename(pagename)
+-	page.data = data
+-	hub.commit()
+-	hub.end()
+-	turbogears.flash(&quot;Changes saved!&quot;)
+-	raise cherrypy.HTTPRedirect('/%s'%pagename)
+-
+     @turbogears.expose(html='threec.templates.createuser')
+     def createuser(self,**kw):
+-	return kw
++	#message = []
++	#kw['message']=message
++	return dict()
++    
++    @turbogears.expose(html='threec.templates.contests')
++    def contests(self,**kw):
++	contests = Contest.select()
++	_contests = []
++	for contest in contests:
++	    _contests.append([contest.name,contest.start,contest.end,contest.user.user,'/problems?contest=%d'%contest.id])
++	    
++	ret = {'contests':_contests}
++	return ret
+ 
++    @turbogears.expose(html='threec.templates.problems')
++    def problems(self,contest):
++	problems = []
++	ret = {'problems':problems}
++#	try:
++	set = Problem.select('contestID=%d'%contest)
++#	except:
++	for item in set:
++	    problems.append([])
++
+     @turbogears.expose(html='threec.templates.createuser')
+     def createaccount(self,**kw):
+-	#ret = {'message':''}
+ 	message = []
+ 	ret = {'message':message}
+ 	good = True
+ 
+ 	for x in kw.items():
+ 	    if len(x[1]) &lt; 3:
+-		#ret[x[0]]=' %s must be at least 3 characters'%x[1]
+ 		message.append('%s must be at least 3 characters'%x[0])
+ 		good = False
+ 
+@@ -85,10 +95,6 @@
+ 	return ret
+ 	
+     @turbogears.expose(html='threec.templates.homepage')
+-    def confirm(self,passwdchk,email):
+-	return dict()
+-
+-    @turbogears.expose(html='threec.templates.homepage')
+     def login(self,user,passwd):
+ 	message = []
+ 	ret = {'message':message}
+
+Modified: trunk/threec/threec/model.py
+===================================================================
+--- trunk/threec/threec/model.py	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/model.py	2005-11-06 05:24:07 UTC (rev 14)
+@@ -2,8 +2,6 @@
+ from turbogears.database import AutoConnectHub
+ 
+ hub = AutoConnectHub()
+-'''I don't think these all need to have _connection = hub, I dont think we will be using a lot of
+-transactions'''
+ 
+ class User(SQLObject):
+     '''Self explanatory'''
+@@ -22,28 +20,30 @@
+     name = StringCol(length=20)
+     problemset = MultipleJoin('Problem')
+     submission = MultipleJoin('Submission')
+-    creator = StringCol()
++    user = ForeignKey('User') #the creator
+ 
+ class Problem(SQLObject):
+     '''Each problem gets an entry in here'''
+     _connection = hub
+-    author = StringCol()
+-    problemName = StringCol()
+-    problemUrl = StringCol()
+-    timelimit = IntCol()
+-    memlimit = IntCol()
+-    correctness = IntCol()
++    author = StringCol(notNone=True)
++    problemName = StringCol(notNone=True)
++    problemUrl = StringCol(default='/searchProblems')
++    timelimit = IntCol(default=10)
++    memlimit = IntCol(default=512)
++    correctness = IntCol(default=100)
++    contest = ForeignKey('Contest')
+     altjudgerprogram = StringCol(default=None)
+ 
+ class Submission(SQLObject):
+     '''I think it would be better to just log all submissions which contests can store the ID to'''
++    _connection = hub
+     user = ForeignKey('User')
+     problem = ForeignKey('Problem')
+-    code = StringCol()
++    code = StringCol(notNone=True)
+     response = StringCol(length=10)
+-    speed = IntCol()
+-    memory = IntCol()
+-    time = DateTimeCol()
++    speed = IntCol(notNone=True)
++    memory = IntCol(notNone=True)
++    time = DateTimeCol(default=DateTimeCol.now())
+     contest = ForeignKey('Contest')
+ 
+ class Page(SQLObject):
+
+Added: trunk/threec/threec/templates/contests.kid
+===================================================================
+--- trunk/threec/threec/templates/contests.kid	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/templates/contests.kid	2005-11-06 05:24:07 UTC (rev 14)
+@@ -0,0 +1,24 @@
++&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;<A HREF="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd</A>&quot;&gt;
++&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot;
++      py:extends=&quot;'master.kid'&quot;&gt;
++
++  &lt;head&gt;
++    &lt;meta content=&quot;text/html; charset=UTF-8&quot; http-equiv=&quot;content-type&quot; /&gt;
++    &lt;title&gt;All Contests&lt;/title&gt;
++  &lt;/head&gt;
++  
++  &lt;body&gt;
++    &lt;table&gt;
++      &lt;tr&gt;
++	&lt;td&gt;Name&lt;/td&gt;&lt;td&gt;Start&lt;/td&gt;&lt;td&gt;End&lt;/td&gt;&lt;td&gt;Created By&lt;/td&gt;&lt;td&gt;Problem Set&lt;/td&gt;
++      &lt;/tr&gt;
++      &lt;tr py:for=&quot;contest in contests&quot;&gt;
++	&lt;td py:content=&quot;contest[0]&quot;&gt;Name&lt;/td&gt;
++	&lt;td py:content=&quot;contest[1]&quot;&gt;Start&lt;/td&gt;
++	&lt;td py:content=&quot;contest[2]&quot;&gt;End&lt;/td&gt;
++	&lt;td py:content=&quot;contest[3]&quot;&gt;Created By&lt;/td&gt;
++	&lt;td&gt;&lt;a href=&quot;${contest[4]}&quot;&gt;View Problems&lt;/a&gt;&lt;/td&gt;
++      &lt;/tr&gt;
++    &lt;/table&gt;
++  &lt;/body&gt;
++&lt;/html&gt;
+
+Modified: trunk/threec/threec/templates/createuser.kid
+===================================================================
+--- trunk/threec/threec/templates/createuser.kid	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/templates/createuser.kid	2005-11-06 05:24:07 UTC (rev 14)
+@@ -1,20 +1,10 @@
+-&lt;html xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot;&gt;
++&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;<A HREF="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd</A>&quot;&gt;
+ 
+-&lt;?python
+-try:
+-   if message:
+-      pass
+-except NameError:
+-   message = []
+-print 'ok all'
+-?&gt;
++&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot; py:extends=&quot;'master.kid'&quot;&gt;
+   &lt;head&gt;
+     &lt;title&gt;Creating Your Account&lt;/title&gt;
+   &lt;/head&gt;
+   &lt;body&gt;
+-    &lt;span py:for=&quot;msg in message&quot;&gt;
+-      &lt;p py:content=&quot;msg&quot;&gt;Message to be displayed&lt;/p&gt;
+-    &lt;/span&gt;
+     &lt;form action=&quot;createaccount&quot; method=&quot;post&quot;&gt;
+       Desired Username:&lt;textarea name=&quot;username&quot; rows=&quot;1&quot; cols=&quot;15&quot;&gt;&lt;/textarea&gt;&lt;br/&gt;
+       Desired Password:&lt;input name=&quot;passwd&quot; type=&quot;password&quot; rows=&quot;1&quot; cols=&quot;15&quot;/&gt;&lt;br/&gt;
+
+Modified: trunk/threec/threec/templates/homepage.kid
+===================================================================
+--- trunk/threec/threec/templates/homepage.kid	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/templates/homepage.kid	2005-11-06 05:24:07 UTC (rev 14)
+@@ -1,6 +1,5 @@
+ &lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;<A HREF="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd</A>&quot;&gt;
+-&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot;
+-      py:extends=&quot;'master.kid'&quot;&gt;
++&lt;html xmlns=&quot;<A HREF="http://www.w3.org/1999/xhtml">http://www.w3.org/1999/xhtml</A>&quot; xmlns:py=&quot;<A HREF="http://purl.org/kid/ns#">http://purl.org/kid/ns#</A>&quot; py:extends=&quot;'master.kid'&quot;&gt;
+ 
+   &lt;head&gt;
+     &lt;meta content=&quot;text/html; charset=UTF-8&quot; http-equiv=&quot;content-type&quot; /&gt;
+@@ -21,19 +20,16 @@
+       &lt;input type=&quot;submit&quot; value=&quot;Login&quot; /&gt;&lt;br/&gt;
+     &lt;/form&gt;
+     
+-    &lt;a href=&quot;/RecentMatches&quot;&gt;Recent Contests&lt;/a&gt;&lt;br/&gt;
+-
+     &lt;br/&gt;
++    &lt;a href=&quot;/contests&quot;&gt;All Competitions&lt;/a&gt;&lt;br/&gt;
+     &lt;a href=&quot;/calender&quot;&gt;Upcoming Competitions&lt;/a&gt;&lt;br/&gt;
+     &lt;a href=&quot;/host&quot;&gt;Manage your Competitions&lt;/a&gt;&lt;br/&gt;
+ 
+     &lt;br /&gt;
+     Search for a User:&lt;br/&gt;
+-    &lt;form action=&quot;searchuser&quot; method=&quot;post&quot;&gt;
++    &lt;form action=&quot;searchUsers&quot; method=&quot;post&quot;&gt;
+       &lt;textarea name=&quot;user&quot; rows=&quot;1&quot; cols=&quot;15&quot;&gt;&lt;/textarea&gt;&lt;br/&gt;      
+-      &lt;input type=&quot;radio&quot; name=&quot;type&quot; value=&quot;coder&quot; checked=&quot;true&quot;&gt;As a Coder&lt;/input&gt;
+       &lt;input type=&quot;submit&quot; value=&quot;Search&quot; /&gt;&lt;br/&gt;
+-      &lt;input type=&quot;radio&quot; name=&quot;type&quot; value=&quot;setter&quot;&gt;As a Problem Setter&lt;/input&gt;
+     &lt;/form&gt;&lt;br/&gt;
+     
+     &lt;div&gt;
+
+Modified: trunk/threec/threec/templates/master.kid
+===================================================================
+--- trunk/threec/threec/templates/master.kid	2005-11-06 02:48:48 UTC (rev 13)
++++ trunk/threec/threec/templates/master.kid	2005-11-06 05:24:07 UTC (rev 14)
+@@ -14,6 +14,7 @@
+    if message:
+       pass
+ except NameError:
++   print 'created an empty message'
+    message = []
+ 
+ print 'this works'
+
+
+</PRE>
+
+<!--endarticle-->
+    <HR>
+    <P><UL>
+        <!--threads-->
+	<LI>Previous message: <A HREF="000006.html">[Threec-svn] r13 - trunk/judge
+</A></li>
+	<LI>Next message: <A HREF="000008.html">[Threec-svn] r15 - in trunk/threec/threec: . templates
+</A></li>
+         <LI> <B>Messages sorted by:</B> 
+              <a href="date.html#7">[ date ]</a>
+              <a href="thread.html#7">[ thread ]</a>
+              <a href="subject.html#7">[ subject ]</a>
+              <a href="author.html#7">[ author ]</a>
+         </LI>
+       </UL>
+
+<hr>
+<a href="https://lists.berlios.de/mailman/listinfo/threec-svn">More information about the Threec-svn
+mailing list</a><br>
+</body></html>
